@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Rocket Defense</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a0000;
+      --accent: #cc0000;
+      --accent2: #ff3333;
+      --green: #3fb950;
+      --red: #ff3333;
+      --yellow: #e3b341;
+      --orange: #f0883e;
+      --purple: #a371f7;
+      --text: #e8e0e0;
+      --text-dim: #887070;
+      --panel-w: 270px;
+      --tr-red: #cc0000;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ─── SIDEBAR ─────────────────────────────────────────────────────── */
+    #sidebar {
+      width: var(--panel-w);
+      min-width: var(--panel-w);
+      background: var(--surface);
+      border-right: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    #sidebar-header {
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #1a0000, #0a0008);
+      text-align: center;
+    }
+
+    #sidebar-header .tr-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--accent);
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px rgba(204, 0, 0, 0.8), 0 0 40px rgba(204, 0, 0, 0.4);
+    }
+
+    #sidebar-header .tr-logo span {
+      color: #fff;
+    }
+
+    #sidebar-header p {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 3px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* HUD */
+    #hud {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .hud-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 9px;
+    }
+
+    .hud-label {
+      font-size: 9px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hud-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    #hud-money .hud-value {
+      color: var(--yellow);
+    }
+
+    #hud-lives .hud-value {
+      color: var(--red);
+    }
+
+    #hud-wave .hud-value {
+      color: var(--accent);
+    }
+
+    #hud-enemies .hud-value {
+      color: var(--orange);
+    }
+
+    /* Controls */
+    #controls {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    #controls-row {
+      display: flex;
+      gap: 5px;
+    }
+
+    #speed-btns {
+      display: flex;
+      gap: 5px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all .15s;
+    }
+
+    button:active {
+      transform: scale(.96);
+    }
+
+    .btn-primary {
+      background: var(--tr-red);
+      color: #fff;
+      padding: 8px 12px;
+      flex: 1;
+      border: 1px solid #880000;
+    }
+
+    .btn-primary:hover {
+      background: #ee0000;
+      box-shadow: 0 0 12px rgba(204, 0, 0, 0.5);
+    }
+
+    .btn-primary:disabled {
+      background: #330000;
+      color: #663333;
+      cursor: default;
+      border-color: #220000;
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      flex: 1;
+    }
+
+    .btn-secondary:hover {
+      background: #1a0000;
+      border-color: #440000;
+    }
+
+    .btn-secondary.active {
+      background: var(--tr-red);
+      color: #fff;
+      border-color: var(--tr-red);
+      box-shadow: 0 0 8px rgba(204, 0, 0, 0.4);
+    }
+
+    .btn-danger {
+      background: #440000;
+      color: #ff6666;
+      padding: 7px 10px;
+      flex: 1;
+      border: 1px solid #660000;
+    }
+
+    .btn-danger:hover {
+      background: #660000;
+    }
+
+    #btn-start-wave {
+      width: 100%;
+      font-size: 12px;
+      padding: 9px;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 1px;
+    }
+
+    /* Tower selector */
+    #tower-selector {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #tower-selector h3 {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 7px;
+    }
+
+    #tower-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .tower-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 11px;
+      transition: all .15s;
+      text-align: left;
+      width: 100%;
+    }
+
+    .tower-btn:hover {
+      border-color: var(--accent);
+      background: #1a0000;
+    }
+
+    .tower-btn.selected {
+      border-color: var(--accent);
+      background: #200000;
+      box-shadow: 0 0 8px rgba(204, 0, 0, 0.4);
+    }
+
+    .tower-btn.unaffordable {
+      opacity: .4;
+      cursor: default;
+    }
+
+    .tower-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .tower-info {
+      flex: 1;
+    }
+
+    .tower-name {
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .tower-cost {
+      font-size: 10px;
+      color: var(--yellow);
+      margin-top: 1px;
+    }
+
+    .tower-shortcut {
+      font-size: 10px;
+      color: var(--text-dim);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      flex-shrink: 0;
+    }
+
+    /* Tower info */
+    #tower-info {
+      padding: 10px 12px;
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #tower-info.visible {
+      display: flex;
+    }
+
+    #tower-info h3 {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #tower-info-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #tower-info-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border: 1px solid #440000;
+    }
+
+    #tower-info-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    #tower-info-level {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    #tower-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .stat-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 7px;
+    }
+
+    .stat-label {
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .stat-value {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    #upgrade-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .upgrade-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--text);
+      text-align: left;
+      width: 100%;
+      font-size: 11px;
+    }
+
+    .upgrade-btn:hover:not(:disabled) {
+      border-color: var(--green);
+      background: #001a00;
+    }
+
+    .upgrade-btn:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+
+    .upgrade-btn-label {
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .upgrade-btn-cost {
+      color: var(--yellow);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .upgrade-btn-cost.cant-afford {
+      color: var(--red);
+    }
+
+    #btn-sell {
+      background: transparent;
+      border: 1px solid #660000;
+      color: #ff6666;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      width: 100%;
+    }
+
+    #btn-sell:hover {
+      background: rgba(204, 0, 0, .15);
+    }
+
+    /* ─── POKÉDEX ─────────────────────────────────────────────────────── */
+    #pokedex {
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    #pokedex-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    #pokedex-header h3 {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    #pokedex-count {
+      font-size: 10px;
+      color: var(--yellow);
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    #pokedex-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      min-height: 36px;
+    }
+
+    #pokedex-grid img {
+      width: 32px;
+      height: 32px;
+      image-rendering: pixelated;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    #pokedex-empty {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Toast */
+    #msg {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(20, 0, 0, .92);
+      border: 1px solid #440000;
+      color: var(--text);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .25s, transform .25s;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    #msg.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Canvas area */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    #game-canvas {
+      display: block;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+
+    /* Menu overlay */
+    #menu-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 0, 0, .92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 10;
+    }
+
+    .menu-tr-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--accent);
+      text-align: center;
+      line-height: 1.1;
+      text-shadow: 0 0 40px rgba(204, 0, 0, .7), 0 0 80px rgba(204, 0, 0, .3);
+    }
+
+    .menu-tr-logo span {
+      color: #ffffff;
+      font-size: 28px;
+      display: block;
+      letter-spacing: 6px;
+      margin-top: 4px;
+    }
+
+    #menu-overlay p {
+      color: var(--text-dim);
+      font-size: 13px;
+      text-align: center;
+      max-width: 380px;
+      line-height: 1.7;
+    }
+
+    #best-score-display {
+      color: var(--yellow);
+      font-size: 12px;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    .menu-btn {
+      padding: 13px 44px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      background: var(--tr-red);
+      color: #fff;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all .15s;
+      box-shadow: 0 0 20px rgba(204, 0, 0, .5);
+    }
+
+    .menu-btn:hover {
+      background: #ee0000;
+      transform: scale(1.04);
+      box-shadow: 0 0 30px rgba(204, 0, 0, .7);
+    }
+
+    #menu-overlay.hidden {
+      display: none;
+    }
+
+    /* Paused banner */
+    #paused-banner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 36px;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: 0 0 30px rgba(204, 0, 0, .8);
+      pointer-events: none;
+      display: none;
+      z-index: 5;
+    }
+
+    #paused-banner.show {
+      display: block;
+    }
+
+    #kb-hints {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      font-size: 10px;
+      color: var(--text-dim);
+      pointer-events: none;
+      line-height: 1.8;
+      text-align: right;
+    }
+
+    ::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #330000;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <div class="tr-logo">TEAM<span>ROCKET</span></div>
+        <p>Captura · Conquista · Domina</p>
+      </div>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-item" id="hud-money">
+          <div class="hud-label">💰 PokéDólares</div>
+          <div class="hud-value" id="val-money">200</div>
+        </div>
+        <div class="hud-item" id="hud-lives">
+          <div class="hud-label">❤️ Vidas</div>
+          <div class="hud-value" id="val-lives">20</div>
+        </div>
+        <div class="hud-item" id="hud-wave">
+          <div class="hud-label">🌊 Operación</div>
+          <div class="hud-value" id="val-wave">0</div>
+        </div>
+        <div class="hud-item" id="hud-enemies">
+          <div class="hud-label">🎯 Pokémon</div>
+          <div class="hud-value" id="val-enemies">0</div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div id="controls">
+        <button class="btn-primary" id="btn-start-wave" disabled>▶ LANZAR OPERACIÓN 1</button>
+        <div id="controls-row">
+          <button class="btn-secondary" id="btn-pause">⏸ Pausa</button>
+          <button class="btn-danger" id="btn-reset">↺ Reset</button>
+        </div>
+        <div id="speed-btns">
+          <button class="btn-secondary active" id="btn-speed1" style="flex:1">⏩ ×1</button>
+          <button class="btn-secondary" id="btn-speed2" style="flex:1">⚡ ×2</button>
+          <button class="btn-secondary" id="btn-speed4" style="flex:1">🔥 ×4</button>
+        </div>
+      </div>
+
+      <!-- Tower / Trainer Selector -->
+      <div id="tower-selector">
+        <h3>🚀 Agentes Team Rocket</h3>
+        <div id="tower-buttons">
+          <button class="tower-btn" id="tower-btn-dart">
+            <div class="tower-icon" style="background:#1a0000">🚀</div>
+            <div class="tower-info">
+              <div class="tower-name">Grunt ♀</div>
+              <div class="tower-cost">$100 · Pokéball estándar</div>
+            </div>
+            <span class="tower-shortcut">1</span>
+          </button>
+          <button class="tower-btn" id="tower-btn-cannon">
+            <div class="tower-icon" style="background:#2a1f00">💣</div>
+            <div class="tower-info">
+              <div class="tower-name">Grunt ♂</div>
+              <div class="tower-cost">$175 · Área Ø120</div>
+            </div>
+            <span class="tower-shortcut">2</span>
+          </button>
+          <button class="tower-btn" id="tower-btn-ice">
+            <div class="tower-icon" style="background:#1a1040">💜</div>
+            <div class="tower-info">
+              <div class="tower-name">Jessie</div>
+              <div class="tower-cost">$120 · Congela Pokémon</div>
+            </div>
+            <span class="tower-shortcut">3</span>
+          </button>
+          <button class="tower-btn" id="tower-btn-sniper">
+            <div class="tower-icon" style="background:#001030">🌹</div>
+            <div class="tower-info">
+              <div class="tower-name">James</div>
+              <div class="tower-cost">$250 · Ultra alcance</div>
+            </div>
+            <span class="tower-shortcut">4</span>
+          </button>
+          <button class="tower-btn" id="tower-btn-laser">
+            <div class="tower-icon" style="background:#1a1500">🪙</div>
+            <div class="tower-info">
+              <div class="tower-name">Meowth</div>
+              <div class="tower-cost">$300 · Penetra ×3</div>
+            </div>
+            <span class="tower-shortcut">5</span>
+          </button>
+          <button class="tower-btn" id="tower-btn-mortar">
+            <div class="tower-icon" style="background:#0a0a0a">😼</div>
+            <div class="tower-info">
+              <div class="tower-name">Giovanni</div>
+              <div class="tower-cost">$400 · Artillería Ø180</div>
+            </div>
+            <span class="tower-shortcut">6</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tower info panel -->
+      <div id="tower-info">
+        <div id="tower-info-header">
+          <div id="tower-info-icon">🚀</div>
+          <div>
+            <div id="tower-info-name">Grunt ♀</div>
+            <div id="tower-info-level">Nivel 1</div>
+          </div>
+        </div>
+        <div id="tower-stats"></div>
+        <h3>⬆️ Potenciar Agente</h3>
+        <div id="upgrade-btns"></div>
+        <button id="btn-sell">💸 Liberar (60%)</button>
+      </div>
+
+      <!-- Pokédex -->
+      <div id="pokedex">
+        <div id="pokedex-header">
+          <h3>📖 Pokédex TR</h3>
+          <span id="pokedex-count">0 capturados</span>
+        </div>
+        <div id="pokedex-grid">
+          <span id="pokedex-empty" style="font-size:10px;color:var(--text-dim);font-style:italic">
+            ¡Captura Pokémon para llenar tu Pokédex!
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CANVAS ═══ -->
+    <div id="canvas-wrap">
+      <!-- Menu overlay -->
+      <div id="menu-overlay">
+        <div class="menu-tr-logo">TEAM ROCKET<span>DEFENSE</span></div>
+        <p>Eres el Team Rocket. Captura todos los Pokémon antes de que escapen. Despliega agentes, lanza Pokéballs y
+          completa tu Pokédex.</p>
+        <div id="best-score-display"></div>
+        <button class="menu-btn" id="btn-play">▶ INICIAR OPERACIÓN</button>
+      </div>
+
+      <!-- Paused -->
+      <div id="paused-banner">PAUSADO</div>
+
+      <canvas id="game-canvas"></canvas>
+
+      <div id="kb-hints">
+        P: Pausa &nbsp; R: Reiniciar<br>
+        1-6: Agente &nbsp; D: Debug<br>
+        Esc: Deseleccionar
+      </div>
+    </div>
+
+  </div>
+
+  <div id="msg"></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+
+</html>
