@@ -48,7 +48,7 @@ export class ScenePC {
               </div>
             </div>
             <div class="pc-footer" id="pc-footer">
-              <span style="color:var(--text-dim);font-size:11px">Haz clic en un Pokémon de PC Box para moverlo al equipo, o en uno del equipo para quitarlo.</span>
+              <span style="color:var(--text-dim);font-size:11px">Haz clic en un Pokémon de PC Box para moverlo al equipo, o en uno del equipo para quitarlo. Rare Candy: ${this.trainer.rareCandy}</span>
             </div>
           </div>
         `;
@@ -81,6 +81,7 @@ export class ScenePC {
                     <div class="pc-slot-type" style="font-size:10px;color:var(--text-dim)">${slot.pokemonType}</div>
                     ${evo ? `<div class="pc-xp-bar-bg"><div class="pc-xp-bar-fill" style="width:${xpPct}%"></div></div>` : ''}
                   </div>
+                  ${(evo && this.trainer.rareCandy > 0 && !slot.placed) ? `<button class="pc-candy-btn" data-slot-id="${slot.id}" style="font-size:9px">🍬</button>` : ''}
                   ${(!slot.placed) ? `<button class="pc-remove-btn" data-party-idx="${i}">↩</button>` : ''}
                 `;
                 el.addEventListener('click', () => {
@@ -98,6 +99,20 @@ export class ScenePC {
         }
 
         // Wire remove buttons directly (inside the click above)
+        container.querySelectorAll('.pc-candy-btn').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const slotId = btn.getAttribute('data-slot-id');
+                const result = this.trainer.useRareCandyOnSlot(slotId);
+                if (!result.ok) {
+                    this._showMsg('❌ No se pudo usar Rare Candy en este Pokémon.');
+                    return;
+                }
+                this._showMsg(`🌟 ${result.newName} evolucionó con Rare Candy. (${this.trainer.rareCandy} restantes)`);
+                this._renderParty();
+                this._renderBox();
+            });
+        });
     }
 
     _renderBox() {
@@ -117,6 +132,7 @@ export class ScenePC {
             card.innerHTML = `
               <img src="${getSpriteUrl(slot.pokemonId)}" alt="${slot.name}" width="32" height="32" style="image-rendering:pixelated;display:block;margin:0 auto">
               <div style="font-size:9px;text-align:center;color:var(--text);margin-top:2px">${slot.name}</div>
+              ${(EVOLUTION_CHAIN[slot.pokemonId] && this.trainer.rareCandy > 0) ? `<button class="pc-box-candy" data-slot-id="${slot.id}" style="font-size:8px;margin-top:2px">🍬 usar</button>` : ''}
               ${inParty ? '<div style="font-size:8px;text-align:center;color:#a371f7">En equipo</div>' : ''}
             `;
             card.addEventListener('click', () => {
@@ -132,6 +148,21 @@ export class ScenePC {
                 }
             });
             grid.appendChild(card);
+        });
+
+        grid.querySelectorAll('.pc-box-candy').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const slotId = btn.getAttribute('data-slot-id');
+                const result = this.trainer.useRareCandyOnSlot(slotId);
+                if (!result.ok) {
+                    this._showMsg('❌ No se pudo usar Rare Candy en este Pokémon.');
+                    return;
+                }
+                this._showMsg(`🌟 ${result.newName} evolucionó con Rare Candy. (${this.trainer.rareCandy} restantes)`);
+                this._renderParty();
+                this._renderBox();
+            });
         });
     }
 

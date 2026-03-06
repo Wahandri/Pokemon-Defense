@@ -11,6 +11,7 @@ import { createPokemonTower } from '../entities/PokemonTower.js';
 import { spawnDeathParticles, Particle } from '../entities/Particle.js';
 import { MAP1 } from '../data/maps.js';
 import { STARTER_TOWER_CONFIG } from '../data/balance.js';
+import { getSpriteUrl } from '../data/pokemon.js';
 
 export class SceneGymPlay {
     /**
@@ -31,7 +32,7 @@ export class SceneGymPlay {
 
         this.debug = false;
 
-        this.pathSystem = new PathSystem(MAP1.waypoints);
+        this.pathSystem = new PathSystem(gymZone?.waypoints ?? MAP1.waypoints);
         this.occupiedCells = new Set();
 
         this.towers = [];
@@ -248,16 +249,16 @@ export class SceneGymPlay {
                 label: allDone ? '¡Completado!' : `⚔️ Oleada ${this._gymWaveIdx + 1}`,
             });
         }
+        this.ui.updateSpecialSlots?.([], null);
     }
 
     // ─── Evolution ───────────────────────────────────────────────────────────
 
     _applyEvolution(tower, { newName, newId }) {
-        const { EVOLUTION_CHAIN } = await import('../data/balance.js').catch(() => ({ EVOLUTION_CHAIN: {} }));
         tower.pokemonName = newName;
         tower.pokemonId = newId;
         const img = new Image();
-        img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${newId}.png`;
+        img.src = getSpriteUrl(newId);
         img.onload = () => { tower._img = img; };
         this.ui.showMessage?.(`🌟 ¡${newName} ha evolucionado!`, 3000);
         const slot = this.trainer.getSlot(tower.slotId);

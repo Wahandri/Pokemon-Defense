@@ -1,7 +1,7 @@
 // ─── Pokémon Data (Gen 1 only, IDs 1–151) ─────────────────────────────────────
 // Tier pools for enemy spawning. All IDs are Gen 1 (≤151).
 
-// Sprite path — local first (after running tools/build_sprites_gen1.py), CDN fallback.
+// Sprite path — local only (offline runtime after build script).
 // Local files are served by `python3 -m http.server` without any bundler.
 export function getSpriteUrl(id) {
     // Local sprites are downloaded by tools/build_sprites_gen1.py
