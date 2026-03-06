@@ -188,8 +188,9 @@ export class TrainerSystem {
     }
 
     evolveSlot(slotId) {
-        const idx = this.party.findIndex(s => s.id === slotId);
-        const slot = idx >= 0 ? this.party[idx] : null;
+        const partyIdx = this.party.findIndex(s => s.id === slotId);
+        const boxIdx = this.pcBox.findIndex(s => s.id === slotId);
+        const slot = partyIdx >= 0 ? this.party[partyIdx] : (boxIdx >= 0 ? this.pcBox[boxIdx] : null);
         if (!slot) return { ok: false };
         const evo = EVOLUTION_CHAIN[slot.pokemonId];
         if (!evo) return { ok: false };

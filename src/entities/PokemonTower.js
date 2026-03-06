@@ -5,6 +5,7 @@
 
 import { STARTER_TOWER_CONFIG } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
+import { getTowerConfig } from '../data/pokemon_tower_config.js';
 import { ImageCache } from '../utils/ImageCache.js';
 import { dist } from '../utils/math.js';
 import { DartProjectile, IceProjectile } from './Projectile.js';
@@ -34,9 +35,13 @@ export class PokemonTower {
         this.x = col * cellSize + cellSize / 2;
         this.y = row * cellSize + cellSize / 2;
 
-        // Stats: from STARTER_TOWER_CONFIG if starter, else defaults
+        // Stats: from STARTER_TOWER_CONFIG if starter, else species config
+        const towerCfg = getTowerConfig(pokemonId, pokemonType);
         const cfg = (starterKey && STARTER_TOWER_CONFIG[starterKey]) ?? {
-            range: 110, fireRate: 0.7, damage: 10, projSpeed: 300,
+            range: towerCfg.baseRange ?? 110,
+            fireRate: towerCfg.baseFireRate ?? 0.7,
+            damage: towerCfg.baseDamage ?? 10,
+            projSpeed: 300,
             color: '#aaaaaa', glowColor: '#ffffff', bgColor: '#1a1a1a',
         };
         this.range = cfg.range;
@@ -48,6 +53,9 @@ export class PokemonTower {
         this.color = cfg.color;
         this.glowColor = cfg.glowColor;
         this.bgColor = cfg.bgColor;
+        this.specialKey = towerCfg.special;
+        this.specialCooldownMs = towerCfg.cooldown ?? 10000;
+        this._specialReadyAt = Date.now();
 
         // Firing state
         this._fireInterval = 1000 / this.fireRate;
@@ -83,6 +91,11 @@ export class PokemonTower {
 
     update(dt, enemies, addProj) {
         if (this.dead) return;
+        const now = Date.now();
+        const damageMult = (this._damageBoostEnd && now < this._damageBoostEnd) ? (this._damageBoostMult ?? 1.5) : 1;
+        const fireRateMult = (this._fireRateBoostEnd && now < this._fireRateBoostEnd) ? (this._fireRateBoostMult ?? 1.5) : 1;
+        this._fireInterval = 1000 / Math.max(0.1, this.fireRate * fireRateMult);
+
         this._fireCooldown -= dt;
         if (this._shootAnim > 0) this._shootAnim -= dt;
 
@@ -95,7 +108,7 @@ export class PokemonTower {
 
                 const projParams = {
                     x: this.x, y: this.y, target,
-                    damage: this.damage,
+                    damage: this.damage * damageMult,
                     speed: this.projSpeed,
                     attackerType: this.pokemonType,
                     attacker: this,
@@ -173,6 +186,19 @@ export class PokemonTower {
     }
 
     addXP(amount) { this._xp += amount; }
+
+    isSpecialReady(now = Date.now()) {
+        return now >= this._specialReadyAt;
+    }
+
+    triggerSpecial(now = Date.now()) {
+        this._specialReadyAt = now + this.specialCooldownMs;
+    }
+
+    getSpecialCooldownPct(now = Date.now()) {
+        if (this.isSpecialReady(now)) return 0;
+        return Math.max(0, Math.min(1, (this._specialReadyAt - now) / this.specialCooldownMs));
+    }
 }
 
 /** Create a PokémonTower from a TrainerSystem backpack slot */

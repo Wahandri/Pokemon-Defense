@@ -13,6 +13,8 @@ import { spawnDeathParticles, spawnCaptureEffect, Particle } from '../entities/P
 import { RareCandyItem } from '../entities/RareCandyItem.js';
 import { MAP1 } from '../data/maps.js';
 import { XP_PER_TIER, EVOLUTION_CHAIN, STARTER_TOWER_CONFIG } from '../data/balance.js';
+import { ABILITIES } from '../data/abilities.js';
+import { getSpriteUrl } from '../data/pokemon.js';
 
 export class ScenePlay {
     /**
@@ -35,7 +37,7 @@ export class ScenePlay {
 
         // ── Map / Path ────────────────────────────────────────────────────────
         this.map = MAP1;
-        this.pathSystem = new PathSystem(MAP1.waypoints);
+        this.pathSystem = new PathSystem(zoneConfig?.waypoints ?? MAP1.waypoints);
 
         // ── Grid ──────────────────────────────────────────────────────────────
         this.occupiedCells = new Set();  // 'col_row' strings
@@ -180,6 +182,32 @@ export class ScenePlay {
                 this.ui.showMessage('❌ No tienes Rare Candy', 1500);
             }
         });
+
+        ui.bindSpecialHandler((slotIdx) => this._useSpecialFromSlot(slotIdx));
+    }
+
+    _useSpecialFromSlot(slotIdx) {
+        const tower = this.towers[slotIdx];
+        if (!tower || !tower.specialKey) return;
+        if (!tower.isSpecialReady()) {
+            this.ui.showMessage('⏳ Habilidad en cooldown', 800);
+            return;
+        }
+        const ability = ABILITIES[tower.specialKey];
+        if (!ability?.execute) return;
+        ability.execute({
+            tower,
+            enemies: this.enemies,
+            allTowers: this.towers,
+            addParticle: (x, y, color = '#fff', n = 6) => {
+                for (let i = 0; i < n; i++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const s = 50 + Math.random() * 120;
+                    this.particles.push(new Particle(x, y, Math.cos(a) * s, Math.sin(a) * s, color, 500 + Math.random() * 350, 2));
+                }
+            },
+        });
+        tower.triggerSpecial();
     }
 
     // ─── Wave Control ─────────────────────────────────────────────────────────
@@ -395,7 +423,7 @@ export class ScenePlay {
 
         // Reload sprite
         const img = new Image();
-        img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${newId}.png`;
+        img.src = getSpriteUrl(newId);
         img.onload = () => { tower._img = img; };
 
         this.ui.showMessage(`🌟 ¡${newName} ha evolucionado! Dmg×${(evo?.damageBonus ?? 1).toFixed(1)}`, 3500);
@@ -519,6 +547,7 @@ export class ScenePlay {
             enabled: !ws.isRunning,
             running: ws.isRunning,
         });
+        this.ui.updateSpecialSlots(this.towers, ABILITIES);
     }
 
     // ─── Update Loop ──────────────────────────────────────────────────────────

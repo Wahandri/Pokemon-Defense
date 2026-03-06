@@ -18,6 +18,7 @@ export class UI {
         this.btnSpeed1 = document.getElementById('btn-speed1');
         this.btnSpeed2 = document.getElementById('btn-speed2');
         this.btnSpeed4 = document.getElementById('btn-speed4');
+        this.specialSlots = document.getElementById('special-slots');
 
         this.towerInfoPanel = document.getElementById('tower-info');
         this.towerInfoName = document.getElementById('tower-info-name');
@@ -38,6 +39,7 @@ export class UI {
         this._pickupHandler = null;   // NOTE: never set to null again after init — bug fix
         this._evolveHandler = null;   // (slotId) → void
         this._candyHandler = null;   // (slotId) → void
+        this._specialHandler = null; // (slotIdx) → void
 
         // Sell / Recuperar button
         const sellBtn = document.getElementById('btn-sell');
@@ -61,6 +63,48 @@ export class UI {
             candyBtn.addEventListener('click', () => {
                 if (this._candyHandler) this._candyHandler();
             });
+        }
+
+        this._buildSpecialSlotButtons();
+    }
+
+    _buildSpecialSlotButtons() {
+        if (!this.specialSlots) return;
+        this.specialSlots.innerHTML = '';
+        for (let i = 0; i < 6; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'btn-secondary';
+            btn.style.cssText = 'position:relative;width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px';
+            btn.innerHTML = `<span style="font-size:9px;color:var(--text-dim)">S${i + 1}</span>`;
+            btn.addEventListener('click', () => this._specialHandler?.(i));
+            this.specialSlots.appendChild(btn);
+        }
+    }
+
+    updateSpecialSlots(towers, abilities) {
+        if (!this.specialSlots) return;
+        const now = Date.now();
+        const btns = [...this.specialSlots.querySelectorAll('button')];
+        for (let i = 0; i < 6; i++) {
+            const tower = towers[i] ?? null;
+            const btn = btns[i];
+            if (!btn) continue;
+            if (!tower) {
+                btn.disabled = true;
+                btn.innerHTML = `<span style="font-size:9px;color:var(--text-dim)">S${i + 1}</span>`;
+                continue;
+            }
+            const ab = abilities?.[tower.specialKey];
+            const cooldownPct = tower.getSpecialCooldownPct?.(now) ?? 1;
+            const ready = tower.isSpecialReady?.(now);
+            btn.disabled = false;
+            btn.title = `${tower.pokemonName} · ${ab?.label ?? tower.specialKey}`;
+            btn.innerHTML = `
+              <img src="${getSpriteUrl(tower.pokemonId)}" width="34" height="34" style="image-rendering:pixelated;z-index:1">
+              <div style="position:absolute;left:0;bottom:0;width:100%;height:${Math.round(cooldownPct * 100)}%;background:rgba(0,0,0,0.55);"></div>
+              <div style="position:absolute;top:1px;right:2px;font-size:12px;z-index:2">${ab?.emoji ?? '✨'}</div>
+              <div style="position:absolute;left:2px;bottom:1px;font-size:8px;color:${ready ? '#3fb950' : '#e3b341'};z-index:2">${ready ? 'OK' : 'CD'}</div>
+            `;
         }
     }
 
@@ -240,6 +284,7 @@ export class UI {
     bindPickupHandler(handler) { this._pickupHandler = handler; }
     bindEvolveHandler(handler) { this._evolveHandler = handler; }
     bindCandyHandler(handler) { this._candyHandler = handler; }
+    bindSpecialHandler(handler) { this._specialHandler = handler; }
 
     // ─── Pokédex ──────────────────────────────────────────────────────────────
 

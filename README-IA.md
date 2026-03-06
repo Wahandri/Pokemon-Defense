@@ -1,6 +1,6 @@
 # Entrenador Pokémon: Atrápalos a todos — README-IA
 
-> **Fecha de refactor:** 2026-03-05  
+> **Fecha de refactor:** 2026-03-06  
 > **Engine:** Vanilla JS ES Modules + Canvas 2D (sin bundler, sin npm)  
 > **Servidor:** `python3 -m http.server 8181 --directory .`
 
@@ -20,7 +20,7 @@ No hay vidas, no hay dinero. Solo XP, Pokébolas y la Pokédex.
 - `level` — nivel del entrenador  
 - `xp / xpToNext` — experiencia acumulada y umbral de subida  
 - `pokeballs` — conteo de Pokébolas disponibles (se usan en captura)  
-- `rareCandy` — bonus cosmético (gana uno cada 3 niveles)  
+- `rareCandy` — recurso funcional (drop en rondas + uso para evolucionar)  
 - `pokedex` — `Map<id, {name, count}>` de Pokémon capturados  
 - `backpack` — array de slots `{id, pokemonId, name, pokemonType, placed}` — Pokémon disponibles para colocar como torres  
 
@@ -50,6 +50,28 @@ Un Pokémon capturado se añade **a la mochila** con un slot propio, y puede col
 - Solo pueden colocarse/recogerse cuando la ronda **NO está en curso**.
 - Click derecho o botón "Recuperar" en panel → devuelve el Pokémon a la mochila.
 - Cada torre tiene `pokemonType` (fuego / agua / planta / ...) para efect. de tipos.
+- Cada torre tiene `specialKey` + `specialCooldownMs` desde `src/data/pokemon_tower_config.js`.
+
+### Sprites locales (offline runtime)
+- Carpeta de sprites: `src/data/sprites/gen1/{id}.png`.
+- Índice generado: `src/data/sprites/gen1/index.json`.
+- El runtime usa solo `getSpriteUrl(id) => src/data/sprites/gen1/${id}.png`.
+- Script de build: `python3 tools/build_sprites_gen1.py`
+  - Descarga sprites Gen1 (151)
+  - Re-encode opcional con Pillow a 80×80 PNG optimizado
+  - Escribe `index.json`
+
+### Habilidades especiales compartidas (20)
+- Catálogo en `src/data/abilities.js` con 20 keys reutilizables:
+  `AOE_BLAST, BURN_DOT, POISON_DOT, FREEZE_STUN, PSY_STUN, KNOCKBACK, CHAIN_LIGHTNING, SLOW_FIELD, ARMOR_SHRED, HEAL_TOWER, MULTI_SHOT, PIERCE_SHOT, SNIPE_MARK, CONFUSE_WANDER, ROOT_STOP, WAVE_PUSH, METEOR_RAIN, SHIELD_SELF, SPEED_BUFF, CAPTURE_NET`.
+- UI: 6 slots de especiales (panel de controles), con icono, emoji de habilidad y overlay de cooldown.
+- Al click: si está listo, ejecuta la habilidad del Pokémon torre correspondiente.
+
+### Rare Candy
+- Item flotante por ronda perfecta y cada 5 rondas (zonas).
+- Click sobre item para recoger `+1`.
+- Botón “Rare Candy” en panel de torre para evolucionar en `ScenePlay`.
+- También disponible en `ScenePC` (party y box), con botón 🍬 por Pokémon si puede evolucionar.
 
 ### Efectividad de tipos (`src/data/balance.js → TYPE_CHART`)
 | Atacante | Defensor | Multiplicador |
@@ -83,7 +105,7 @@ Cuando el HP de un enemigo llega a 0, **NO muere** — entra en estado `weakened
 |---------|--------|-----|
 | Pokébolas | Inicio: 3; +1 por ronda perfecta; posible drop futuro | Captura Pokémon debilitados |
 | XP | +10/20/40/80 por captura (según tier) | Subir nivel del entrenador |
-| RareCandy | +1 cada 3 niveles | Cosmético actualmente |
+| RareCandy | +1 cada 3 niveles, ronda perfecta, cada 5 rondas, item clicable | Evolucionar Pokémon con cadena disponible |
 
 No hay dinero ni vidas. No hay penalización por escapes.
 
