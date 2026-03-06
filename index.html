@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Team Rocket Defense</title>
+  <title>Entrenador Pokémon: Atrápalos a todos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link
     href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600&display=swap"
@@ -22,18 +22,20 @@
       --bg: #0a0a0f;
       --surface: #12121a;
       --surface2: #1a1a26;
-      --border: #2a0000;
-      --accent: #cc0000;
-      --accent2: #ff3333;
+      --border: #1e2a1e;
+      --accent: #3fb950;
+      --accent2: #78c850;
+      --accent-fire: #f08030;
+      --accent-water: #6890f0;
       --green: #3fb950;
-      --red: #ff3333;
+      --red: #f85149;
       --yellow: #e3b341;
       --orange: #f0883e;
       --purple: #a371f7;
-      --text: #e8e0e0;
-      --text-dim: #887070;
+      --text: #e0ece0;
+      --text-dim: #708070;
       --panel-w: 270px;
-      --tr-red: #cc0000;
+      --poke-green: #3fb950;
     }
 
     html,
@@ -68,21 +70,18 @@
     #sidebar-header {
       padding: 14px 14px 10px;
       border-bottom: 1px solid var(--border);
-      background: linear-gradient(135deg, #1a0000, #0a0008);
+      background: linear-gradient(135deg, #0a1a0a, #0a100a);
       text-align: center;
     }
 
-    #sidebar-header .tr-logo {
+    #sidebar-header .game-logo {
       font-family: 'Orbitron', sans-serif;
-      font-size: 28px;
+      font-size: 16px;
       font-weight: 900;
       color: var(--accent);
-      letter-spacing: 4px;
-      text-shadow: 0 0 20px rgba(204, 0, 0, 0.8), 0 0 40px rgba(204, 0, 0, 0.4);
-    }
-
-    #sidebar-header .tr-logo span {
-      color: #fff;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(63, 185, 80, 0.7), 0 0 40px rgba(63, 185, 80, 0.3);
+      line-height: 1.2;
     }
 
     #sidebar-header p {
@@ -90,23 +89,28 @@
       color: var(--text-dim);
       margin-top: 3px;
       letter-spacing: 1px;
-      text-transform: uppercase;
     }
 
     /* HUD */
     #hud {
       padding: 10px 12px;
       border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .hud-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      gap: 5px;
     }
 
     .hud-item {
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 7px 9px;
+      padding: 6px 9px;
     }
 
     .hud-label {
@@ -118,17 +122,26 @@
 
     .hud-value {
       font-family: 'Orbitron', sans-serif;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      margin-top: 2px;
+      margin-top: 1px;
     }
 
-    #hud-money .hud-value {
+    #hud-level .hud-value {
       color: var(--yellow);
     }
 
-    #hud-lives .hud-value {
+    #hud-xp .hud-value {
+      color: var(--accent);
+      font-size: 12px;
+    }
+
+    #hud-pokeballs .hud-value {
       color: var(--red);
+    }
+
+    #hud-candy .hud-value {
+      color: var(--purple);
     }
 
     #hud-wave .hud-value {
@@ -137,6 +150,43 @@
 
     #hud-enemies .hud-value {
       color: var(--orange);
+    }
+
+    /* XP bar */
+    #xp-bar-wrap {
+      height: 4px;
+      background: rgba(63, 185, 80, 0.15);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    #xp-bar {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width .3s;
+      border-radius: 3px;
+    }
+
+    /* Pokéball drag source */
+    #pokeball-drag-src {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      user-select: none;
+      font-size: 22px;
+      filter: drop-shadow(0 0 6px rgba(248, 81, 73, 0.6));
+      transition: transform .1s;
+    }
+
+    #pokeball-drag-src:hover {
+      transform: scale(1.15);
+    }
+
+    #pokeball-drag-src:active {
+      cursor: grabbing;
+      transform: scale(0.92);
     }
 
     /* Controls */
@@ -173,23 +223,25 @@
     }
 
     .btn-primary {
-      background: var(--tr-red);
-      color: #fff;
+      background: var(--poke-green);
+      color: #000;
       padding: 8px 12px;
       flex: 1;
-      border: 1px solid #880000;
+      border: 1px solid #2a8a3a;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 1px;
     }
 
     .btn-primary:hover {
-      background: #ee0000;
-      box-shadow: 0 0 12px rgba(204, 0, 0, 0.5);
+      background: #56cc66;
+      box-shadow: 0 0 12px rgba(63, 185, 80, 0.5);
     }
 
     .btn-primary:disabled {
-      background: #330000;
-      color: #663333;
+      background: #1a3a1a;
+      color: #3a6a3a;
       cursor: default;
-      border-color: #220000;
+      border-color: #1a2a1a;
     }
 
     .btn-secondary {
@@ -201,38 +253,36 @@
     }
 
     .btn-secondary:hover {
-      background: #1a0000;
-      border-color: #440000;
+      background: #1a2a1a;
+      border-color: #3a6a3a;
     }
 
     .btn-secondary.active {
-      background: var(--tr-red);
-      color: #fff;
-      border-color: var(--tr-red);
-      box-shadow: 0 0 8px rgba(204, 0, 0, 0.4);
+      background: var(--poke-green);
+      color: #000;
+      border-color: var(--poke-green);
+      box-shadow: 0 0 8px rgba(63, 185, 80, 0.4);
     }
 
     .btn-danger {
-      background: #440000;
-      color: #ff6666;
+      background: #1a3a1a;
+      color: #5fb96a;
       padding: 7px 10px;
       flex: 1;
-      border: 1px solid #660000;
+      border: 1px solid #2a4a2a;
     }
 
     .btn-danger:hover {
-      background: #660000;
+      background: #2a5a2a;
     }
 
     #btn-start-wave {
       width: 100%;
       font-size: 12px;
       padding: 9px;
-      font-family: 'Orbitron', sans-serif;
-      letter-spacing: 1px;
     }
 
-    /* Tower selector */
+    /* Tower selector (backpack) */
     #tower-selector {
       padding: 10px 12px;
       border-bottom: 1px solid var(--border);
@@ -250,6 +300,8 @@
       display: flex;
       flex-direction: column;
       gap: 5px;
+      max-height: 220px;
+      overflow-y: auto;
     }
 
     .tower-btn {
@@ -267,31 +319,20 @@
       width: 100%;
     }
 
-    .tower-btn:hover {
+    .tower-btn:hover:not(:disabled) {
       border-color: var(--accent);
-      background: #1a0000;
+      background: #0a1a0a;
     }
 
     .tower-btn.selected {
       border-color: var(--accent);
-      background: #200000;
-      box-shadow: 0 0 8px rgba(204, 0, 0, 0.4);
+      background: #0f280f;
+      box-shadow: 0 0 8px rgba(63, 185, 80, 0.4);
     }
 
     .tower-btn.unaffordable {
       opacity: .4;
       cursor: default;
-    }
-
-    .tower-icon {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      flex-shrink: 0;
     }
 
     .tower-info {
@@ -305,24 +346,13 @@
 
     .tower-cost {
       font-size: 10px;
-      color: var(--yellow);
       margin-top: 1px;
-    }
-
-    .tower-shortcut {
-      font-size: 10px;
-      color: var(--text-dim);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1px 5px;
-      flex-shrink: 0;
     }
 
     /* Tower info */
     #tower-info {
       padding: 10px 12px;
-      flex: 1;
+      border-bottom: 1px solid var(--border);
       display: none;
       flex-direction: column;
       gap: 8px;
@@ -345,15 +375,10 @@
       gap: 10px;
     }
 
-    #tower-info-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      border: 1px solid #440000;
+    #tower-info-sprite {
+      width: 40px;
+      height: 40px;
+      image-rendering: pixelated;
     }
 
     #tower-info-name {
@@ -361,12 +386,6 @@
       font-size: 12px;
       font-weight: 700;
       color: var(--accent);
-    }
-
-    #tower-info-level {
-      font-size: 10px;
-      color: var(--text-dim);
-      margin-top: 2px;
     }
 
     #tower-stats {
@@ -393,52 +412,10 @@
       margin-top: 1px;
     }
 
-    #upgrade-btns {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .upgrade-btn {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 10px;
-      color: var(--text);
-      text-align: left;
-      width: 100%;
-      font-size: 11px;
-    }
-
-    .upgrade-btn:hover:not(:disabled) {
-      border-color: var(--green);
-      background: #001a00;
-    }
-
-    .upgrade-btn:disabled {
-      opacity: .35;
-      cursor: default;
-    }
-
-    .upgrade-btn-label {
-      font-weight: 600;
-      font-size: 11px;
-    }
-
-    .upgrade-btn-cost {
-      color: var(--yellow);
-      font-weight: 600;
-      margin-top: 3px;
-    }
-
-    .upgrade-btn-cost.cant-afford {
-      color: var(--red);
-    }
-
     #btn-sell {
       background: transparent;
-      border: 1px solid #660000;
-      color: #ff6666;
+      border: 1px solid #2a6a2a;
+      color: #5fb96a;
       padding: 6px;
       border-radius: 6px;
       font-size: 11px;
@@ -446,13 +423,14 @@
     }
 
     #btn-sell:hover {
-      background: rgba(204, 0, 0, .15);
+      background: rgba(63, 185, 80, .12);
     }
 
     /* ─── POKÉDEX ─────────────────────────────────────────────────────── */
     #pokedex {
       padding: 10px 12px 12px;
       border-top: 1px solid var(--border);
+      flex: 1;
     }
 
     #pokedex-header {
@@ -483,17 +461,11 @@
     }
 
     #pokedex-grid img {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       image-rendering: pixelated;
       border-radius: 4px;
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    #pokedex-empty {
-      font-size: 10px;
-      color: var(--text-dim);
-      font-style: italic;
+      background: rgba(255, 255, 255, 0.03);
     }
 
     /* Toast */
@@ -502,8 +474,8 @@
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%) translateY(20px);
-      background: rgba(20, 0, 0, .92);
-      border: 1px solid #440000;
+      background: rgba(10, 20, 10, .94);
+      border: 1px solid #2a5a2a;
       color: var(--text);
       padding: 10px 20px;
       border-radius: 8px;
@@ -513,6 +485,7 @@
       transition: opacity .25s, transform .25s;
       z-index: 100;
       white-space: nowrap;
+      max-width: 90vw;
     }
 
     #msg.show {
@@ -535,36 +508,42 @@
       display: block;
       image-rendering: pixelated;
       cursor: crosshair;
+      /* Responsive: fill available space maintaining 16/9 */
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      aspect-ratio: 16 / 9;
     }
 
     /* Menu overlay */
     #menu-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(8, 0, 0, .92);
+      background: rgba(5, 10, 5, .95);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
+      gap: 18px;
       z-index: 10;
     }
 
-    .menu-tr-logo {
+    .menu-logo {
       font-family: 'Orbitron', sans-serif;
-      font-size: 52px;
+      font-size: 42px;
       font-weight: 900;
       color: var(--accent);
       text-align: center;
       line-height: 1.1;
-      text-shadow: 0 0 40px rgba(204, 0, 0, .7), 0 0 80px rgba(204, 0, 0, .3);
+      text-shadow: 0 0 40px rgba(63, 185, 80, .7), 0 0 80px rgba(63, 185, 80, .3);
     }
 
-    .menu-tr-logo span {
+    .menu-logo span {
       color: #ffffff;
-      font-size: 28px;
+      font-size: 22px;
       display: block;
-      letter-spacing: 6px;
+      letter-spacing: 4px;
       margin-top: 4px;
     }
 
@@ -572,14 +551,81 @@
       color: var(--text-dim);
       font-size: 13px;
       text-align: center;
-      max-width: 380px;
+      max-width: 360px;
       line-height: 1.7;
     }
 
-    #best-score-display {
-      color: var(--yellow);
-      font-size: 12px;
+    /* Starter selection */
+    #starter-select {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #starter-select p {
       font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      color: var(--yellow);
+      letter-spacing: 2px;
+    }
+
+    #starter-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .starter-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all .2s;
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 80px;
+    }
+
+    .starter-btn img {
+      width: 56px;
+      height: 56px;
+      image-rendering: pixelated;
+    }
+
+    .starter-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .starter-btn[data-starter="bulbasaur"]:hover,
+    .starter-btn[data-starter="bulbasaur"].selected {
+      border-color: #78c850;
+      background: #0a1a06;
+      box-shadow: 0 0 20px rgba(120, 200, 80, 0.4);
+    }
+
+    .starter-btn[data-starter="charmander"]:hover,
+    .starter-btn[data-starter="charmander"].selected {
+      border-color: #f08030;
+      background: #1a0a00;
+      box-shadow: 0 0 20px rgba(240, 128, 48, 0.4);
+    }
+
+    .starter-btn[data-starter="squirtle"]:hover,
+    .starter-btn[data-starter="squirtle"].selected {
+      border-color: #6890f0;
+      background: #060a1a;
+      box-shadow: 0 0 20px rgba(104, 144, 240, 0.4);
+    }
+
+    .starter-btn.selected {
+      transform: scale(1.08) translateY(-2px);
     }
 
     .menu-btn {
@@ -588,19 +634,26 @@
       font-size: 14px;
       font-weight: 700;
       letter-spacing: 2px;
-      background: var(--tr-red);
-      color: #fff;
+      background: var(--poke-green);
+      color: #000;
       border-radius: 10px;
       border: none;
       cursor: pointer;
       transition: all .15s;
-      box-shadow: 0 0 20px rgba(204, 0, 0, .5);
+      box-shadow: 0 0 20px rgba(63, 185, 80, .5);
     }
 
-    .menu-btn:hover {
-      background: #ee0000;
+    .menu-btn:hover:not(:disabled) {
+      background: #56cc66;
       transform: scale(1.04);
-      box-shadow: 0 0 30px rgba(204, 0, 0, .7);
+      box-shadow: 0 0 30px rgba(63, 185, 80, .7);
+    }
+
+    .menu-btn:disabled {
+      background: #1a3a1a;
+      color: #3a6a3a;
+      cursor: default;
+      box-shadow: none;
     }
 
     #menu-overlay.hidden {
@@ -617,7 +670,7 @@
       font-size: 36px;
       font-weight: 900;
       color: var(--accent);
-      text-shadow: 0 0 30px rgba(204, 0, 0, .8);
+      text-shadow: 0 0 30px rgba(63, 185, 80, .8);
       pointer-events: none;
       display: none;
       z-index: 5;
@@ -647,8 +700,321 @@
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #330000;
+      background: #2a5a2a;
       border-radius: 2px;
+    }
+
+    /* ─── ZONE SELECT OVERLAY ───────────────────────────────────────────── */
+    #zone-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(5, 10, 20, 0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #zone-overlay.hidden {
+      display: none;
+    }
+
+    .zone-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 460px;
+      max-width: 96vw;
+      padding: 24px;
+      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.7);
+    }
+
+    .zone-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .zone-modal-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--accent);
+    }
+
+    .zone-modal-badges {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .badge-icon {
+      font-size: 18px;
+      filter: drop-shadow(0 0 4px gold);
+    }
+
+    .zone-modal-subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .zone-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+
+    .zone-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+
+    .zone-card.unlocked:hover {
+      background: #0e2a0e;
+      border-color: var(--accent);
+    }
+
+    .zone-card.unlocked.gym {
+      border-left: 3px solid var(--yellow);
+    }
+
+    .zone-card.locked {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .zone-card-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .zone-card-info {
+      flex: 1;
+    }
+
+    .zone-card-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .zone-card-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .zone-card-lock {
+      font-size: 10px;
+      color: #a371f7;
+      margin-top: 3px;
+    }
+
+    .zone-card-enter {
+      font-size: 20px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .zone-modal-footer {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .zone-btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .zone-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+    }
+
+    /* ─── PC OVERLAY ────────────────────────────────────────────────────── */
+    #pc-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(5, 10, 24, 0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pc-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 720px;
+      max-width: 98vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #0a1220, #080d1a);
+      border-bottom: 1px solid var(--border);
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    #pc-close-btn {
+      background: rgba(248, 81, 73, .14);
+      border: 1px solid #4a1010;
+      color: #f85149;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+    }
+
+    #pc-close-btn:hover {
+      background: rgba(248, 81, 73, .26);
+    }
+
+    .pc-body {
+      display: flex;
+      gap: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pc-panel {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+    }
+
+    .pc-panel-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .pc-box-panel {
+      flex: 1;
+      border-left: 1px solid var(--border);
+    }
+
+    #pc-party-panel {
+      width: 220px;
+      min-width: 220px;
+      border-right: 1px solid var(--border);
+    }
+
+    .pc-party-slot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+
+    .pc-party-slot:hover {
+      border-color: var(--accent);
+    }
+
+    .pc-empty-slot {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .pc-slot-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pc-slot-name {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pc-slot-type {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .pc-xp-bar-bg {
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      margin-top: 3px;
+    }
+
+    .pc-xp-bar-fill {
+      height: 3px;
+      background: var(--purple);
+      border-radius: 2px;
+    }
+
+    .pc-box-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .pc-box-card {
+      width: 56px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 4px;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+
+    .pc-box-card:hover {
+      border-color: var(--accent2);
+    }
+
+    .pc-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .pc-slot-empty-label {
+      width: 100%;
+      text-align: center;
+      color: var(--border);
+      font-size: 10px;
     }
   </style>
 </head>
@@ -659,119 +1025,118 @@
     <!-- ═══ SIDEBAR ═══ -->
     <div id="sidebar">
       <div id="sidebar-header">
-        <div class="tr-logo">TEAM<span>ROCKET</span></div>
-        <p>Captura · Conquista · Domina</p>
+        <div class="game-logo">🎮 ENTRENADOR<span>POKÉMON</span></div>
+        <p>Captura · Completa · Domina</p>
       </div>
 
       <!-- HUD -->
       <div id="hud">
-        <div class="hud-item" id="hud-money">
-          <div class="hud-label">💰 PokéDólares</div>
-          <div class="hud-value" id="val-money">200</div>
+        <div class="hud-row">
+          <div class="hud-item" id="hud-level">
+            <div class="hud-label">⭐ Nivel</div>
+            <div class="hud-value" id="val-level">1</div>
+          </div>
+          <div class="hud-item" id="hud-pokeballs">
+            <div class="hud-label">🔴 Pokébolas</div>
+            <div class="hud-value" id="val-pokeballs">3</div>
+          </div>
         </div>
-        <div class="hud-item" id="hud-lives">
-          <div class="hud-label">❤️ Vidas</div>
-          <div class="hud-value" id="val-lives">20</div>
+        <!-- XP row -->
+        <div class="hud-item" id="hud-xp">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="hud-label">📈 XP</div>
+            <div class="hud-value" id="val-xp" style="font-size:11px">0/100</div>
+          </div>
+          <div id="xp-bar-wrap" style="margin-top:4px">
+            <div id="xp-bar"></div>
+          </div>
         </div>
-        <div class="hud-item" id="hud-wave">
-          <div class="hud-label">🌊 Operación</div>
-          <div class="hud-value" id="val-wave">0</div>
+        <div class="hud-row">
+          <div class="hud-item" id="hud-candy">
+            <div class="hud-label">🍬 RareCandy</div>
+            <div class="hud-value" id="val-candy">0</div>
+          </div>
+          <div class="hud-item" id="hud-wave">
+            <div class="hud-label">🌊 Ronda</div>
+            <div class="hud-value" id="val-wave">0</div>
+          </div>
         </div>
-        <div class="hud-item" id="hud-enemies">
-          <div class="hud-label">🎯 Pokémon</div>
-          <div class="hud-value" id="val-enemies">0</div>
+        <div class="hud-row">
+          <div class="hud-item" id="hud-enemies">
+            <div class="hud-label">🎯 Pokémon</div>
+            <div class="hud-value" id="val-enemies">0</div>
+          </div>
+          <!-- Pokéball drag source -->
+          <div class="hud-item"
+            style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px">
+            <div class="hud-label">Arrastra</div>
+            <div id="pokeball-drag-src" title="Arrastra la pokébola sobre un Pokémon debilitado">🔴</div>
+          </div>
+        </div>
+        <!-- Zone + Badges row -->
+        <div class="hud-row">
+          <div class="hud-item" style="flex:2">
+            <div class="hud-label">🗺️ Zona</div>
+            <div class="hud-value" id="val-zone" style="font-size:11px">—</div>
+          </div>
+          <div class="hud-item">
+            <div class="hud-label">🏅 Medallas</div>
+            <div class="hud-value" id="val-badges" style="font-size:11px">—</div>
+          </div>
         </div>
       </div>
 
       <!-- Controls -->
       <div id="controls">
-        <button class="btn-primary" id="btn-start-wave" disabled>▶ LANZAR OPERACIÓN 1</button>
+        <button class="btn-primary" id="btn-start-wave" disabled>▶ LANZAR RONDA 1</button>
         <div id="controls-row">
           <button class="btn-secondary" id="btn-pause">⏸ Pausa</button>
-          <button class="btn-danger" id="btn-reset">↺ Reset</button>
+          <button class="btn-danger" id="btn-reset">↺ Menú</button>
         </div>
         <div id="speed-btns">
-          <button class="btn-secondary active" id="btn-speed1" style="flex:1">⏩ ×1</button>
-          <button class="btn-secondary" id="btn-speed2" style="flex:1">⚡ ×2</button>
-          <button class="btn-secondary" id="btn-speed4" style="flex:1">🔥 ×4</button>
+          <button class="btn-secondary active" id="btn-speed1" style="flex:1">×1</button>
+          <button class="btn-secondary" id="btn-speed2" style="flex:1">×2</button>
+          <button class="btn-secondary" id="btn-speed4" style="flex:1">×4</button>
         </div>
       </div>
 
-      <!-- Tower / Trainer Selector -->
+      <!-- Backpack (now Party) -->
       <div id="tower-selector">
-        <h3>🚀 Agentes Team Rocket</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <h3>👜 Equipo</h3>
+          <button id="btn-open-pc"
+            style="font-size:10px;background:rgba(163,113,247,.12);border:1px solid #5a3a7a;color:#a371f7;padding:3px 8px;border-radius:6px;cursor:pointer">💾
+            PC</button>
+        </div>
         <div id="tower-buttons">
-          <button class="tower-btn" id="tower-btn-dart">
-            <div class="tower-icon" style="background:#1a0000">🚀</div>
-            <div class="tower-info">
-              <div class="tower-name">Grunt ♀</div>
-              <div class="tower-cost">$100 · Pokéball estándar</div>
-            </div>
-            <span class="tower-shortcut">1</span>
-          </button>
-          <button class="tower-btn" id="tower-btn-cannon">
-            <div class="tower-icon" style="background:#2a1f00">💣</div>
-            <div class="tower-info">
-              <div class="tower-name">Grunt ♂</div>
-              <div class="tower-cost">$175 · Área Ø120</div>
-            </div>
-            <span class="tower-shortcut">2</span>
-          </button>
-          <button class="tower-btn" id="tower-btn-ice">
-            <div class="tower-icon" style="background:#1a1040">💜</div>
-            <div class="tower-info">
-              <div class="tower-name">Jessie</div>
-              <div class="tower-cost">$120 · Congela Pokémon</div>
-            </div>
-            <span class="tower-shortcut">3</span>
-          </button>
-          <button class="tower-btn" id="tower-btn-sniper">
-            <div class="tower-icon" style="background:#001030">🌹</div>
-            <div class="tower-info">
-              <div class="tower-name">James</div>
-              <div class="tower-cost">$250 · Ultra alcance</div>
-            </div>
-            <span class="tower-shortcut">4</span>
-          </button>
-          <button class="tower-btn" id="tower-btn-laser">
-            <div class="tower-icon" style="background:#1a1500">🪙</div>
-            <div class="tower-info">
-              <div class="tower-name">Meowth</div>
-              <div class="tower-cost">$300 · Penetra ×3</div>
-            </div>
-            <span class="tower-shortcut">5</span>
-          </button>
-          <button class="tower-btn" id="tower-btn-mortar">
-            <div class="tower-icon" style="background:#0a0a0a">😼</div>
-            <div class="tower-info">
-              <div class="tower-name">Giovanni</div>
-              <div class="tower-cost">$400 · Artillería Ø180</div>
-            </div>
-            <span class="tower-shortcut">6</span>
-          </button>
+          <span style="font-size:10px;color:var(--text-dim)">Elige un starter para comenzar</span>
         </div>
       </div>
 
       <!-- Tower info panel -->
       <div id="tower-info">
         <div id="tower-info-header">
-          <div id="tower-info-icon">🚀</div>
+          <img id="tower-info-sprite" src="" alt="" width="40" height="40" style="image-rendering:pixelated">
           <div>
-            <div id="tower-info-name">Grunt ♀</div>
-            <div id="tower-info-level">Nivel 1</div>
+            <div id="tower-info-name">Pokémon</div>
           </div>
         </div>
         <div id="tower-stats"></div>
-        <h3>⬆️ Potenciar Agente</h3>
-        <div id="upgrade-btns"></div>
-        <button id="btn-sell">💸 Liberar (60%)</button>
+        <button id="btn-evolve"
+          style="display:none;background:linear-gradient(135deg,#7B2FBE,#f0c040);color:#fff;border:none;padding:7px;border-radius:6px;font-size:11px;width:100%;margin-top:3px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:700">⭐
+          Evolucionar</button>
+        <button id="btn-use-candy"
+          style="display:none;background:linear-gradient(135deg,#a371f7,#c792ea);color:#fff;border:none;padding:7px;border-radius:6px;font-size:11px;width:100%;margin-top:3px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:700">🍬
+          Rare Candy (0)</button>
+        <button id="btn-sell">📦 Recuperar</button>
       </div>
 
       <!-- Pokédex -->
       <div id="pokedex">
         <div id="pokedex-header">
-          <h3>📖 Pokédex TR</h3>
-          <span id="pokedex-count">0 capturados</span>
+          <h3>📖 Pokédex</h3>
+          <span id="pokedex-count"
+            style="font-size:10px;color:var(--yellow);font-family:'Orbitron',sans-serif">0/151</span>
         </div>
         <div id="pokedex-grid">
           <span id="pokedex-empty" style="font-size:10px;color:var(--text-dim);font-style:italic">
@@ -785,11 +1150,33 @@
     <div id="canvas-wrap">
       <!-- Menu overlay -->
       <div id="menu-overlay">
-        <div class="menu-tr-logo">TEAM ROCKET<span>DEFENSE</span></div>
-        <p>Eres el Team Rocket. Captura todos los Pokémon antes de que escapen. Despliega agentes, lanza Pokéballs y
-          completa tu Pokédex.</p>
-        <div id="best-score-display"></div>
-        <button class="menu-btn" id="btn-play">▶ INICIAR OPERACIÓN</button>
+        <div class="menu-logo">ENTRENADOR<span>POKÉMON</span></div>
+        <p>Captura Pokémon silvestres debilitándolos con tus aliados y lanzando Pokébolas. ¡Completa la Pokédex de
+          Kanto!</p>
+
+        <div id="starter-select">
+          <p>— Elige tu Starter —</p>
+          <div id="starter-row">
+            <button class="starter-btn" data-starter="bulbasaur">
+              <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png" alt="Bulbasaur">
+              Bulbasaur
+              <span style="font-size:9px;color:#78c850">🌿 Planta</span>
+            </button>
+            <button class="starter-btn" data-starter="charmander">
+              <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png"
+                alt="Charmander">
+              Charmander
+              <span style="font-size:9px;color:#f08030">🔥 Fuego</span>
+            </button>
+            <button class="starter-btn" data-starter="squirtle">
+              <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png" alt="Squirtle">
+              Squirtle
+              <span style="font-size:9px;color:#6890f0">💧 Agua</span>
+            </button>
+          </div>
+        </div>
+
+        <button class="menu-btn" id="btn-play" disabled>▶ INICIAR AVENTURA</button>
       </div>
 
       <!-- Paused -->
@@ -798,15 +1185,16 @@
       <canvas id="game-canvas"></canvas>
 
       <div id="kb-hints">
-        P: Pausa &nbsp; R: Reiniciar<br>
-        1-6: Agente &nbsp; D: Debug<br>
-        Esc: Deseleccionar
+        Clic: seleccionar/colocar · Clic derecho: recuperar<br>
+        Arrastra 🔴 sobre Pokémon debilitado · Esc: cancelar<br>
+        P: pausa · D: debug
       </div>
     </div>
 
   </div>
 
   <div id="msg"></div>
+
   <script type="module" src="src/main.js"></script>
 </body>
 

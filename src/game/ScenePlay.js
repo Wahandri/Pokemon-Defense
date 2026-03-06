@@ -1,32 +1,36 @@
 // ─── Play Scene ────────────────────────────────────────────────────────────────
-// Main gameplay scene: towers, enemies, projectiles, waves, input handling.
+// Main gameplay scene: Pokémon towers (backpack), wild enemy Pokémon,
+// pokéball drag-capture, type effectiveness, procedural rounds.
 
 import { CANVAS_W, CANVAS_H, CELL, COLS, ROWS } from '../utils/constants.js';
-import { pixelToGrid } from '../utils/math.js';
+import { pixelToGrid, gridToPixel } from '../utils/math.js';
 import { PathSystem } from '../systems/PathSystem.js';
 import { WaveSystem } from '../systems/WaveSystem.js';
 import { Collision } from '../systems/Collision.js';
 import { createEnemy } from '../entities/Enemy.js';
-import { createTower, TOWER_DEFS } from '../entities/Tower.js';
-import { spawnDeathParticles, spawnCaptureEffect, spawnLegendaryCaptureEffect } from '../entities/Particle.js';
+import { createPokemonTower } from '../entities/PokemonTower.js';
+import { spawnDeathParticles, spawnCaptureEffect, Particle } from '../entities/Particle.js';
+import { RareCandyItem } from '../entities/RareCandyItem.js';
 import { MAP1 } from '../data/maps.js';
-import { START_MONEY, START_LIVES, calcWaveBonus } from '../data/balance.js';
+import { XP_PER_TIER, EVOLUTION_CHAIN, STARTER_TOWER_CONFIG } from '../data/balance.js';
 
 export class ScenePlay {
     /**
      * @param {CanvasRenderingContext2D} ctx
-     * @param {UI}    ui
-     * @param {Function} onGameOver   callback(waveSurvived)
-     * @param {Function} onVictory    callback(score)
+     * @param {UI}            ui
+     * @param {TrainerSystem} trainerSystem
+     * @param {Function}      onGameOver   callback()
+     * @param {object}        [zoneConfig]  - if set, uses zone encounters + roundRules
+     * @param {Function}      [onExit]      - called when player exits zone
      */
-    constructor(ctx, ui, onGameOver) {
+    constructor(ctx, ui, trainerSystem, onGameOver, zoneConfig = null, onExit = null) {
         this.ctx = ctx;
         this.ui = ui;
         this.onGameOver = onGameOver;
+        this.trainer = trainerSystem;
+        this.zoneConfig = zoneConfig; // KantoZone | null
+        this.onExit = onExit;
 
-        // ── State ─────────────────────────────────────────────────────────────
-        this.money = START_MONEY;
-        this.lives = START_LIVES;
         this.debug = false;
 
         // ── Map / Path ────────────────────────────────────────────────────────
@@ -34,40 +38,45 @@ export class ScenePlay {
         this.pathSystem = new PathSystem(MAP1.waypoints);
 
         // ── Grid ──────────────────────────────────────────────────────────────
-        // Set of "col_row" keys occupied by towers
-        this.occupiedCells = new Set();
+        this.occupiedCells = new Set();  // 'col_row' strings
 
         // ── Entities ──────────────────────────────────────────────────────────
         this.towers = [];
         this.enemies = [];
         this.projectiles = [];
         this.particles = [];
-        this._pendingWaveBonus = 0;
-
-        // ── Pokédex ───────────────────────────────────────────────────────────
-        // Map<pokemonId, { name, type, count, color }>
-        this.pokedex = new Map();
+        this.rareCandyItems = [];   // floating collectible RareCandyItems
 
         // ── Wave system ───────────────────────────────────────────────────────
+        this._roundSpawned = 0;
+        this._roundWeakened = 0;
         this.waveSystem = new WaveSystem(
-            (type, waveNum) => this._spawnEnemy(type, waveNum),
-            (waveNum) => this._onWaveClear(waveNum)
+            (type, waveNum, forcePokemon) => this._spawnEnemy(type, waveNum, forcePokemon),
+            (waveNum, escaped) => this._onWaveClear(waveNum, escaped)
         );
 
         // ── Input state ───────────────────────────────────────────────────────
-        this.selectedTowerType = null;  // type key or null
-        this.selectedTower = null;  // placed Tower instance (for info panel)
+        this.selectedSlotId = null;   // backpack slot selected for placement
+        this.selectedTower = null;    // placed PokemonTower (click to select)
         this.ghostCol = -1;
         this.ghostRow = -1;
         this.ghostValid = false;
 
-        // ── Pre-render: build background and path into off-screen canvas ──────
+        // Pokéball drag state (managed by Game.js, queried here)
+        this._pokeballDragging = false;
+        this._pokeballDragX = 0;
+        this._pokeballDragY = 0;
+
+        // ── Pre-render ────────────────────────────────────────────────────────
+        if (zoneConfig?.bgColor) {
+            this._zoneBgColor = zoneConfig.bgColor;
+        }
         this._buildBackground();
 
         // ── UI Bindings ───────────────────────────────────────────────────────
         this._bindUI();
 
-        // Update HUD immediately
+        // Initial HUD
         this._updateHUD();
     }
 
@@ -79,24 +88,21 @@ export class ScenePlay {
         this._bgCanvas.height = CANVAS_H;
         const bCtx = this._bgCanvas.getContext('2d');
 
-        // ── Grass base: deep green fill ──────────────────────────────────────
-        bCtx.fillStyle = '#1c3320';
+        // Grass base
+        bCtx.fillStyle = this._zoneBgColor ?? '#1c3320';
         bCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-        // ── Subtle tile texture ───────────────────────────────────────────────
+        // Subtle tile texture
         for (let c = 0; c < COLS; c++) {
             for (let r = 0; r < ROWS; r++) {
-                // Checkerboard variation
                 const shade = (c + r) % 2 === 0 ? 0 : 1;
                 bCtx.fillStyle = shade ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.02)';
                 bCtx.fillRect(c * CELL, r * CELL, CELL, CELL);
 
-                // Random grass tufts (deterministic using seed)
                 const seed = ((c * 37 + r * 13) % 10);
                 if (seed === 3 || seed === 7) {
                     const gx = c * CELL + CELL / 2 + (((c * 7 + r * 3) % 10) - 5);
                     const gy = r * CELL + CELL / 2 + (((c * 3 + r * 11) % 10) - 5);
-                    // Tuft blades
                     bCtx.save();
                     bCtx.strokeStyle = seed === 3 ? '#2a4a2a' : '#244024';
                     bCtx.lineWidth = 1;
@@ -111,7 +117,7 @@ export class ScenePlay {
             }
         }
 
-        // ── Decorative trees (circles with radial gradient) ───────────────────
+        // Decorative trees
         const treePositions = [
             [3, 2], [26, 2], [28, 13], [2, 12], [14, 2], [14, 13],
             [8, 7], [22, 8], [6, 13], [25, 5], [19, 12], [10, 3],
@@ -119,48 +125,19 @@ export class ScenePlay {
         for (const [tc, tr] of treePositions) {
             const tx = tc * CELL + CELL / 2;
             const ty = tr * CELL + CELL / 2;
-            // Check not on path
             if (this.pathSystem.isCellBlocked(tc, tr)) continue;
-
-            const tr1 = 12 + ((tc + tr) % 4) * 2;
-            const grad = bCtx.createRadialGradient(tx - 3, ty - 3, 2, tx, ty, tr1);
+            const tR = 12 + ((tc + tr) % 4) * 2;
+            const grad = bCtx.createRadialGradient(tx - 3, ty - 3, 2, tx, ty, tR);
             grad.addColorStop(0, '#4a8a3a');
             grad.addColorStop(0.6, '#2d6e24');
             grad.addColorStop(1, '#1a4018');
-
-            bCtx.beginPath();
-            bCtx.arc(tx, ty, tr1, 0, Math.PI * 2);
-            bCtx.fillStyle = grad;
-            bCtx.fill();
-            // Shadow
-            bCtx.beginPath();
-            bCtx.ellipse(tx + 4, ty + tr1 - 4, tr1 * 0.6, tr1 * 0.25, 0.3, 0, Math.PI * 2);
-            bCtx.fillStyle = 'rgba(0,0,0,0.25)';
-            bCtx.fill();
-            // Highlight
-            bCtx.beginPath();
-            bCtx.arc(tx - 4, ty - 4, tr1 * 0.35, 0, Math.PI * 2);
-            bCtx.fillStyle = 'rgba(100,200,80,0.25)';
-            bCtx.fill();
+            bCtx.beginPath(); bCtx.arc(tx, ty, tR, 0, Math.PI * 2);
+            bCtx.fillStyle = grad; bCtx.fill();
+            bCtx.beginPath(); bCtx.ellipse(tx + 4, ty + tR - 4, tR * 0.6, tR * 0.25, 0.3, 0, Math.PI * 2);
+            bCtx.fillStyle = 'rgba(0,0,0,0.25)'; bCtx.fill();
         }
 
-        // ── Small rocks ───────────────────────────────────────────────────────
-        const rocks = [[5, 5], [20, 6], [7, 10], [23, 11], [11, 14]];
-        for (const [rc, rr] of rocks) {
-            if (this.pathSystem.isCellBlocked(rc, rr)) continue;
-            const rx = rc * CELL + CELL / 2;
-            const ry = rr * CELL + CELL / 2;
-            const rRad = 5 + (rc % 3);
-            const rg = bCtx.createRadialGradient(rx - 2, ry - 2, 1, rx, ry, rRad);
-            rg.addColorStop(0, '#aab0a8');
-            rg.addColorStop(1, '#5a5e58');
-            bCtx.beginPath();
-            bCtx.ellipse(rx, ry, rRad, rRad * 0.7, 0.2, 0, Math.PI * 2);
-            bCtx.fillStyle = rg;
-            bCtx.fill();
-        }
-
-        // ── Draw path on top ──────────────────────────────────────────────────
+        // Path on top
         this.pathSystem.draw(bCtx, false);
     }
 
@@ -170,74 +147,168 @@ export class ScenePlay {
         const { ui } = this;
         ui.btnStartWave.addEventListener('click', () => this._startWave());
 
-        // Tower selector buttons (event delegation approach — no re-bind)
-        const towerKeys = ['dart', 'cannon', 'ice', 'sniper', 'laser', 'mortar'];
-        for (const key of towerKeys) {
-            const btn = document.getElementById(`tower-btn-${key}`);
-            if (btn) btn.addEventListener('click', () => this._selectTowerType(key));
-        }
-        // Sell button handled in UI via event delegation — no bind needed here
+        ui.bindBackpackSelect((slotId) => this._selectBackpackSlot(slotId));
+
+        ui.bindPickupHandler(() => {
+            if (this.selectedTower) this._pickupTower(this.selectedTower);
+        });
+
+        // Evolucionar button
+        ui.bindEvolveHandler(() => {
+            if (!this.selectedTower) return;
+            const result = this.trainer.evolveSlot(this.selectedTower.slotId);
+            if (result.ok) {
+                this._applyEvolution(this.selectedTower, result);
+            } else if (result.reason === 'needMoreXP') {
+                this.ui.showMessage('❌ XP insuficiente para evolucionar', 1800);
+            }
+        });
+
+        // Usar Rare Candy button
+        ui.bindCandyHandler(() => {
+            if (!this.selectedTower) return;
+            if (this.trainer.rareCandy <= 0) {
+                this.ui.showMessage('❌ No tienes Rare Candy', 1500);
+                return;
+            }
+            const result = this.trainer.useRareCandyOnSlot(this.selectedTower.slotId);
+            if (result.ok) {
+                this._applyEvolution(this.selectedTower, result);
+            } else if (result.reason === 'cantEvolve') {
+                this.ui.showMessage(`${this.selectedTower.pokemonName} no puede evolucionar`, 1800);
+            } else if (result.reason === 'noCandy') {
+                this.ui.showMessage('❌ No tienes Rare Candy', 1500);
+            }
+        });
     }
 
     // ─── Wave Control ─────────────────────────────────────────────────────────
 
     _startWave() {
         if (this.waveSystem.isRunning) return;
-        const ok = this.waveSystem.startNextWave();
-        if (!ok) return;
-        this.ui.showMessage(`⚔️ ¡Oleada ${this.waveSystem.waveNumber} comenzando!`);
+        // Reset per-round trackers
+        this._roundSpawned = 0;
+        this._roundWeakened = 0;
+        this.waveSystem.startNextWave();
+        this.ui.showMessage(`🌊 ¡Ronda ${this.waveSystem.waveNumber} comenzando!`);
+        // Cancel pending placement + deselect tower (can't touch during wave)
+        this.selectedSlotId = null;
+        this._deselectTower();
+        // Rebuild backpack UI so all buttons get disabled
+        this.ui.rebuildBackpackUI(this.trainer.backpack, null, true);
         this._updateHUD();
     }
 
-    _spawnEnemy(type, waveNum = 1) {
-        const enemy = createEnemy(type, this.pathSystem, waveNum);
+    _spawnEnemy(type, waveNum = 1, forcePokemon = null) {
+        // Zone mode: pick encounter from zone's encounter pool
+        if (this.zoneConfig?.encounters?.length) {
+            const pool = this.zoneConfig.encounters;
+            const enc = pool[Math.floor(Math.random() * pool.length)];
+            type = enc.tier;  // use encounter's tier for HP scaling
+            forcePokemon = { id: enc.speciesId, name: enc.name };
+        }
+        const enemy = createEnemy(type, this.pathSystem, waveNum, forcePokemon);
+        if (this.zoneConfig?.encounters?.length) {
+            // Re-assign pokemonType from encounter data so type effectiveness works
+            const pool = this.zoneConfig.encounters;
+            const enc = pool.find(e => e.speciesId === (forcePokemon?.id)) ?? pool[0];
+            enemy.pokemonType = enc.pokemonType;
+        }
         const pos = this.pathSystem.getPositionAt(0);
         enemy.x = pos.x; enemy.y = pos.y;
         this.enemies.push(enemy);
+        this._roundSpawned++;
         this._updateHUD();
     }
 
-    _onWaveClear(waveNum) {
-        // Award wave-clear bonus once all spawning is done
-        const bonus = calcWaveBonus(waveNum);
-        this._pendingWaveBonus = bonus; // applied when last enemy dies
+    _onWaveClear(waveNum, _escaped) {
+        const allWeakened = this._roundSpawned > 0 &&
+            this._roundWeakened >= this._roundSpawned;
+        if (allWeakened) {
+            this.trainer.addPokeball(1);
+            this.ui.showMessage('🎉 ¡Ronda perfecta! +1 Pokébola + RC 🔴', 3500);
+            // Perfect round always spawns a Rare Candy
+            this.rareCandyItems.push(new RareCandyItem());
+        } else {
+            this.ui.showMessage(`✅ Ronda ${waveNum} completada`, 2200);
+        }
+        // Rare Candy drops once every 5 rounds
+        if (waveNum > 0 && waveNum % 5 === 0) {
+            this.rareCandyItems.push(new RareCandyItem());
+            this.ui.showMessage('🍬 ¡Caramelo Raro disponible en el mapa!', 2500);
+        }
+        this._updateHUD();
+        this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
     }
 
-    // ─── Tower Type Selection ─────────────────────────────────────────────────
+    // ─── Backpack / Tower Placement ───────────────────────────────────────────
 
-    _selectTowerType(type) {
-        if (this.selectedTowerType === type) {
-            // Deselect
-            this.selectedTowerType = null;
-            this.ui.clearTowerSelection();
+    _selectBackpackSlot(slotId) {
+        if (this.waveSystem.isRunning) {
+            this.ui.showMessage('⚠️ No puedes mover torres durante la ronda');
+            return;
+        }
+        if (this.selectedSlotId === slotId) {
+            this.selectedSlotId = null;
         } else {
-            const cost = TOWER_DEFS[type].cost;
-            if (this.money < cost) {
-                this.ui.showMessage('💸 Dinero insuficiente');
-                return;
-            }
-            this.selectedTowerType = type;
-            // Deselect any placed tower
+            this.selectedSlotId = slotId;
             this._deselectTower();
         }
-        this.ui.updateTowerSelector(this.selectedTowerType, this.money);
+        this.ui.rebuildBackpackUI(this.trainer.backpack, this.selectedSlotId, false);
     }
 
-    // ─── Placed Tower Selection ───────────────────────────────────────────────
+    _placeTower(col, row) {
+        if (this.waveSystem.isRunning) return;
+        const slotId = this.selectedSlotId;
+        if (!slotId) return;
+        if (!this._isCellOpen(col, row)) {
+            this.ui.showMessage('🚫 No puedes colocar aquí');
+            return;
+        }
+        const slot = this.trainer.backpack.find(s => s.id === slotId);
+        if (!slot || slot.placed) return;
+
+        const tower = createPokemonTower(slot, col, row, CELL);
+        this.towers.push(tower);
+        this.occupiedCells.add(`${col}_${row}`);
+        this.trainer.markPlaced(slotId);
+
+        this.selectedSlotId = null;
+        this.ui.rebuildBackpackUI(this.trainer.backpack, null, this.waveSystem.isRunning);
+        this.ui.showMessage(`✅ ${slot.name} desplegado`);
+        this._updateHUD();
+    }
+
+    _pickupTower(tower) {
+        if (this.waveSystem.isRunning) {
+            this.ui.showMessage('⚠️ No puedes mover torres durante la ronda');
+            return;
+        }
+        this.towers = this.towers.filter(t => t !== tower);
+        this.occupiedCells.delete(`${tower.col}_${tower.row}`);
+        this.trainer.markReturned(tower.slotId);
+        this._deselectTower();
+        this.ui.showMessage(`📦 ${tower.pokemonName} regresó a la mochila`);
+        this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
+        this._updateHUD();
+    }
+
+    _isCellOpen(col, row) {
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+        if (this.pathSystem.isCellBlocked(col, row)) return false;
+        if (this.occupiedCells.has(`${col}_${row}`)) return false;
+        return true;
+    }
+
+    // ─── Tower Selection ──────────────────────────────────────────────────────
 
     _selectTower(tower) {
-        // Deselect previous
         if (this.selectedTower) this.selectedTower.selected = false;
         this.selectedTower = tower;
         if (tower) {
             tower.selected = true;
-            // Show UI panel
-            this.ui.showTowerInfo(
-                tower,
-                this.money,
-                (key) => this._upgradeSelectedTower(key),
-                () => this._sellSelectedTower()
-            );
+            const slot = this.trainer.getSlot(tower.slotId);
+            this.ui.showTowerInfoPokemon(tower, slot, this.trainer);
         } else {
             this.ui.hideTowerInfo();
         }
@@ -249,113 +320,144 @@ export class ScenePlay {
         this.ui.hideTowerInfo();
     }
 
-    // ─── Tower Upgrade ────────────────────────────────────────────────────────
+    // ─── Pokéball Throw ───────────────────────────────────────────────────────
 
-    _upgradeSelectedTower(key) {
-        const tower = this.selectedTower;
-        if (!tower) return;
-
-        const available = tower.getAvailableUpgrades();
-        const upgrade = available.find(u => u.key === key);
-        if (!upgrade) return;
-        if (this.money < upgrade.cost) {
-            this.ui.showMessage('💸 Dinero insuficiente');
+    /** Called by Game.js when player releases drag over canvas */
+    throwPokeball(x, y) {
+        if (!this.waveSystem.isRunning && this.enemies.filter(e => !e.dead).length === 0) {
+            this.ui.showMessage('❌ No hay Pokémon en pantalla');
+            return;
+        }
+        if (!this.trainer.usePokebal()) {
+            this.ui.showMessage('❌ No tienes Pokébolas');
             return;
         }
 
-        const result = tower.applyUpgrade(key);
-        if (result.ok) {
-            this.money -= result.cost;
-            this.ui.showMessage(`✅ Mejora [${key}] aplicada!`);
-            // Refresh UI panel
-            this.ui.showTowerInfo(
-                tower, this.money,
-                (k) => this._upgradeSelectedTower(k),
-                () => this._sellSelectedTower()
-            );
-            this._updateHUD();
+        // Find weakened enemy near click
+        const target = Collision.findWeakened(this.enemies, x, y, 45);
+        if (target) {
+            this._captureEnemy(target);
+        } else {
+            this.ui.showMessage('💨 ¡La Pokébola falló!', 1500);
         }
-    }
-
-    // ─── Sell Tower ───────────────────────────────────────────────────────────
-
-    _sellSelectedTower() {
-        const tower = this.selectedTower;
-        if (!tower) return;
-        const sellVal = tower.getSellValue();
-        this.money += sellVal;
-
-        // Remove from tower list
-        this.towers = this.towers.filter(t => t !== tower);
-        // Free occupied cell
-        this.occupiedCells.delete(`${tower.col}_${tower.row}`);
-
-        this._deselectTower();
-        this.ui.showMessage(`💰 Torre vendida por $${sellVal}`);
         this._updateHUD();
     }
 
-    // ─── Tower Placement ──────────────────────────────────────────────────────
+    _captureEnemy(enemy) {
+        enemy.capture();
+        this.particles.push(...spawnCaptureEffect(enemy.x, enemy.y, enemy.color));
 
-    /**
-     * Returns true if (col, row) can accept a new tower.
-     */
-    _isCellOpen(col, row) {
-        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
-        if (this.pathSystem.isCellBlocked(col, row)) return false;
-        if (this.occupiedCells.has(`${col}_${row}`)) return false;
-        return true;
+        // Pokédex + backpack
+        this.trainer.registerPokedex(enemy.pokemonId, enemy.pokemonName);
+        this.trainer.addCaptured(enemy, this.zoneConfig?.id ?? null);
+
+        // XP split: 70% trainer / 30% tower-slot
+        const totalXP = XP_PER_TIER[enemy.type] ?? 12;
+        const slotXP = Math.ceil(totalXP * 0.30);
+        const trainerXP = totalXP - slotXP;
+
+        if (enemy.lastAttacker?.slotId) {
+            this.trainer.addXPToSlot(enemy.lastAttacker.slotId, slotXP);
+            // Refresh info panel if this tower is selected
+            if (this.selectedTower?.slotId === enemy.lastAttacker.slotId) {
+                const slot = this.trainer.getSlot(enemy.lastAttacker.slotId);
+                this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
+            }
+        }
+
+        const events = this.trainer.addXP(trainerXP);
+        for (const ev of events) {
+            if (ev.type === 'levelup') this.ui.showMessage(`⭐ ¡Nivel ${ev.level}!`, 2500);
+            if (ev.type === 'candy') this.ui.showMessage('🍬 +1 Rare Candy al subir nivel!', 2000);
+        }
+
+        this.ui.showMessage(`✅ ¡${enemy.pokemonName} capturado! +${totalXP} XP`, 1800);
+        this.ui.updatePokedex(this.trainer.pokedex);
+        this.ui.rebuildBackpackUI(this.trainer.backpack, this.selectedSlotId, this.waveSystem.isRunning);
+        this._updateHUD();
     }
 
-    _placeTower(col, row) {
-        const type = this.selectedTowerType;
-        if (!type) return;
+    /** Update a living placed tower after evolution (sprite, stats, name) */
+    _applyEvolution(tower, { newName, newId }) {
+        // Look up bonus multipliers from the chain of the PREVIOUS pokemonId
+        const evo = EVOLUTION_CHAIN[tower.pokemonId];
 
-        const cost = TOWER_DEFS[type].cost;
-        if (this.money < cost) {
-            this.ui.showMessage('💸 Dinero insuficiente');
-            return;
-        }
-        if (!this._isCellOpen(col, row)) {
-            this.ui.showMessage('🚫 No puedes construir aquí');
-            return;
-        }
+        tower.pokemonName = newName;
+        tower.pokemonId = newId;
 
-        const tower = createTower(type, col, row, CELL);
-        this.towers.push(tower);
-        this.occupiedCells.add(`${col}_${row}`);
-        this.money -= cost;
-
-        // Deselect type (stay in placement mode for quick placement)
-        // but notify if out of money
-        if (this.money < TOWER_DEFS[type].cost) {
-            this.selectedTowerType = null;
-            this.ui.clearTowerSelection();
-            this.ui.showMessage('💸 Sin fondos para más torres');
+        // Apply stat boosts using the evo's bonus multipliers
+        if (evo) {
+            tower.damage *= evo.damageBonus ?? 1;
+            tower.range *= evo.rangeBonus ?? 1;
+            tower.fireRate *= evo.fireRateBonus ?? 1;
+            tower._fireInterval = 1000 / tower.fireRate;
         }
 
+        // Reload sprite
+        const img = new Image();
+        img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${newId}.png`;
+        img.onload = () => { tower._img = img; };
+
+        this.ui.showMessage(`🌟 ¡${newName} ha evolucionado! Dmg×${(evo?.damageBonus ?? 1).toFixed(1)}`, 3500);
+
+        // Golden particle burst
+        for (let i = 0; i < 22; i++) {
+            const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 80;
+            const colors = ['#ffd700', '#f0c040', '#ffffff', '#ffe680'];
+            this.particles.push(new Particle(
+                tower.x, tower.y,
+                Math.cos(a) * s, Math.sin(a) * s - 40,
+                colors[Math.floor(Math.random() * colors.length)],
+                700 + Math.random() * 400, 3
+            ));
+        }
+
+        // Refresh UI
+        const slot = this.trainer.getSlot(tower.slotId);
+        this.ui.showTowerInfoPokemon(tower, slot, this.trainer);
+        this.ui.rebuildBackpackUI(this.trainer.backpack, this.selectedSlotId, this.waveSystem.isRunning);
+        this.ui.updatePokedex(this.trainer.pokedex);
         this._updateHUD();
     }
 
     // ─── Mouse Handling ───────────────────────────────────────────────────────
 
     onMouseMove(x, y) {
-        const { col, row } = pixelToGrid(x, y, CELL);
-        this.ghostCol = col;
-        this.ghostRow = row;
-        this.ghostValid = this._isCellOpen(col, row);
+        if (this.selectedSlotId) {
+            const { col, row } = pixelToGrid(x, y, CELL);
+            this.ghostCol = col;
+            this.ghostRow = row;
+            this.ghostValid = this._isCellOpen(col, row);
+        } else {
+            this.ghostCol = -1;
+            this.ghostRow = -1;
+        }
     }
 
     onClick(x, y) {
+        // Check RareCandy collectibles first
+        for (const item of this.rareCandyItems) {
+            if (!item.dead && item.contains(x, y)) {
+                item.dead = true;
+                this.trainer.rareCandy++;
+                this.ui.showMessage('🍬 +1 Rare Candy recogido!', 2000);
+                this._updateHUD();
+                // Refresh tower panel if a tower is selected (button text updates)
+                if (this.selectedTower) {
+                    const slot = this.trainer.getSlot(this.selectedTower.slotId);
+                    this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
+                }
+                return;
+            }
+        }
+
         const { col, row } = pixelToGrid(x, y, CELL);
 
-        // If holding a tower type → place it
-        if (this.selectedTowerType) {
+        if (this.selectedSlotId) {
             this._placeTower(col, row);
             return;
         }
 
-        // Check click on a tower (select it)
         const clicked = this.towers.find(t => t.col === col && t.row === row);
         if (clicked) {
             if (this.selectedTower === clicked) {
@@ -366,21 +468,26 @@ export class ScenePlay {
             return;
         }
 
-        // Click on empty space: deselect tower
         this._deselectTower();
+    }
+
+    onRightClick(x, y) {
+        if (this.selectedSlotId) {
+            this.selectedSlotId = null;
+            this.ui.rebuildBackpackUI(this.trainer.backpack, null, this.waveSystem.isRunning);
+            return;
+        }
+        // Right click on tower → pick it up
+        const { col, row } = pixelToGrid(x, y, CELL);
+        const tower = this.towers.find(t => t.col === col && t.row === row);
+        if (tower) this._pickupTower(tower);
     }
 
     onKeyDown(key) {
         switch (key) {
-            case '1': this._selectTowerType('dart'); break;
-            case '2': this._selectTowerType('cannon'); break;
-            case '3': this._selectTowerType('ice'); break;
-            case '4': this._selectTowerType('sniper'); break;
-            case '5': this._selectTowerType('laser'); break;
-            case '6': this._selectTowerType('mortar'); break;
             case 'Escape':
-                this.selectedTowerType = null;
-                this.ui.clearTowerSelection();
+                this.selectedSlotId = null;
+                this.ui.rebuildBackpackUI(this.trainer.backpack, null, this.waveSystem.isRunning);
                 this._deselectTower();
                 break;
             case 'd':
@@ -395,33 +502,29 @@ export class ScenePlay {
 
     _updateHUD() {
         const ws = this.waveSystem;
+        const t = this.trainer;
         this.ui.updateHUD({
-            money: this.money,
-            lives: this.lives,
+            level: t.level,
+            xp: t.xp,
+            xpToNext: t.xpToNext,
+            pokeballs: t.pokeballs,
+            rareCandy: t.rareCandy,
             wave: ws.waveNumber,
             enemies: this.enemies.filter(e => !e.dead).length,
-            totalWaves: '∞',
+            zone: this.zoneConfig?.name ?? '—',
+            badges: t.badgeCount,
         });
         this.ui.setStartWaveButton({
             waveNum: ws.nextWaveNum,
             enabled: !ws.isRunning,
             running: ws.isRunning,
-            allDone: false,
         });
-        this.ui.updateTowerSelector(this.selectedTowerType, this.money);
-
-        // ── KEY FIX: Only update affordability, NOT rebuild panel every frame ──
-        // showTowerInfo is called only on selection/upgrade change (in _selectTower,
-        // _upgradeSelectedTower). refreshUpgradeAffordability just en/disables btns.
-        if (this.selectedTower) {
-            this.ui.refreshUpgradeAffordability(this.money, this.selectedTower);
-        }
     }
 
     // ─── Update Loop ──────────────────────────────────────────────────────────
 
     update(dt) {
-        // Wave system
+        // Wave system (handles spawning)
         this.waveSystem.update(dt);
 
         // Enemies
@@ -429,10 +532,16 @@ export class ScenePlay {
             if (enemy.dead) continue;
             enemy.update(dt);
 
-            // Reached end
-            if (enemy.reached) {
-                this.lives -= enemy.damage;
-                if (this.lives < 0) this.lives = 0;
+            // Track newly weakened enemies for perfect-round bonus
+            if (enemy.weakened && !enemy._weakenedCounted) {
+                enemy._weakenedCounted = true;
+                this._roundWeakened++;
+            }
+
+            if (enemy.reached && !enemy._rewarded) {
+                enemy._rewarded = true;
+                this.waveSystem.recordEscape();
+                this.ui.showMessage(`💨 ${enemy.pokemonName} escapó…`, 1100);
             }
         }
 
@@ -447,69 +556,28 @@ export class ScenePlay {
             proj.update(dt);
         }
 
-        // Collision detection
+        // Collision (also applies type mult)
         Collision.check(this.projectiles, this.enemies);
-
-        // Reward / capture for killed enemies
-        for (const enemy of this.enemies) {
-            if (enemy.dead && !enemy._rewarded) {
-                enemy._rewarded = true;
-                if (!enemy.reached && enemy.captured) {
-                    this.money += enemy.reward;
-                    // Capture FX
-                    const fx = enemy.type === 'boss'
-                        ? spawnLegendaryCaptureEffect(enemy.x, enemy.y)
-                        : spawnCaptureEffect(enemy.x, enemy.y, enemy.color);
-                    this.particles.push(...fx);
-                    // Register in Pokédex
-                    const pid = enemy.pokemonId;
-                    if (this.pokedex.has(pid)) {
-                        this.pokedex.get(pid).count++;
-                    } else {
-                        this.pokedex.set(pid, {
-                            name: enemy.pokemonName,
-                            type: enemy.type,
-                            color: enemy.color,
-                            count: 1,
-                        });
-                    }
-                    // Toast
-                    const isBoss = enemy.type === 'boss';
-                    this.ui.showMessage(
-                        isBoss ? `🌟 ¡${enemy.pokemonName} LEGENDARIO capturado! +$${enemy.reward}`
-                            : `✅ ¡${enemy.pokemonName} capturado! +$${enemy.reward}`,
-                        isBoss ? 3500 : 1200
-                    );
-                    this.ui.updatePokedex(this.pokedex);
-                }
-            }
-        }
 
         // Particles
         for (const p of this.particles) p.update(dt);
+
+        // RareCandy items
+        for (const item of this.rareCandyItems) item.update(dt);
 
         // Cleanup dead entities
         this.enemies = this.enemies.filter(e => !e.dead);
         this.projectiles = this.projectiles.filter(p => !p.dead);
         this.particles = this.particles.filter(p => !p.dead);
+        this.rareCandyItems = this.rareCandyItems.filter(i => !i.dead);
 
-        // Wave-clear bonus: awarded once spawning ends AND no enemies remain
-        if (this._pendingWaveBonus > 0 && !this.waveSystem.isRunning && this.enemies.length === 0) {
-            this.money += this._pendingWaveBonus;
-            this.ui.showMessage(`🎉 ¡Oleada completada! +$${this._pendingWaveBonus}`);
-            this._pendingWaveBonus = 0;
+        // After spawning is done and all enemies gone → wave clear
+        if (this.waveSystem._spawnDone && this.enemies.length === 0 && this.waveSystem.isRunning) {
+            this.waveSystem.notifyAllEnemiesGone();
         }
 
-        // Update HUD every frame to keep counts current
+        // Update HUD every frame
         this._updateHUD();
-
-        // ── Game Over check ─────────────────────────────────────────────────
-        if (this.lives <= 0) {
-            this.onGameOver(this.waveSystem.waveNumber);
-            return;
-        }
-
-        // No victory condition — waves are infinite. Survive as long as possible.
     }
 
     // ─── Render ───────────────────────────────────────────────────────────────
@@ -517,20 +585,20 @@ export class ScenePlay {
     render() {
         const { ctx } = this;
 
-        // 1. Background (pre-rendered)
+        // 1. Background
         ctx.drawImage(this._bgCanvas, 0, 0);
 
         // 2. Grid overlay (when placing)
-        if (this.selectedTowerType) {
+        if (this.selectedSlotId) {
             this._drawGrid(ctx);
         }
 
         // 3. Ghost tower
-        if (this.selectedTowerType && this.ghostCol >= 0) {
+        if (this.selectedSlotId && this.ghostCol >= 0) {
             this._drawGhost(ctx);
         }
 
-        // 4. Path on top of grid (always visible)
+        // 4. Path on top of grid
         this.pathSystem.draw(ctx, this.debug);
 
         // 5. Towers
@@ -542,16 +610,24 @@ export class ScenePlay {
         // 7. Enemies
         for (const enemy of this.enemies) enemy.draw(ctx, this.debug);
 
-        // 8. Particles
+        // 8. Rare Candy items (on top of map, below UI)
+        for (const item of this.rareCandyItems) item.draw(ctx);
+
+        // 9. Particles
         for (const p of this.particles) p.draw(ctx);
 
-        // 9. Debug overlay
+        // 10. Pokéball drag cursor
+        if (this._pokeballDragging) {
+            this._drawPokeballCursor(ctx, this._pokeballDragX, this._pokeballDragY);
+        }
+
+        // 10. Debug overlay
         if (this.debug) this._drawDebugOverlay(ctx);
     }
 
     _drawGrid(ctx) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 0.5;
         for (let c = 0; c < COLS; c++) {
             for (let r = 0; r < ROWS; r++) {
@@ -562,70 +638,91 @@ export class ScenePlay {
     }
 
     _drawGhost(ctx) {
-        const { ghostCol, ghostRow, ghostValid, selectedTowerType } = this;
+        const { ghostCol, ghostRow, ghostValid } = this;
         if (ghostCol < 0 || ghostCol >= COLS || ghostRow < 0 || ghostRow >= ROWS) return;
 
-        const x = ghostCol * CELL;
-        const y = ghostRow * CELL;
-
-        ctx.save();
-        ctx.fillStyle = ghostValid ? 'rgba(63,185,80,0.25)' : 'rgba(248,81,73,0.25)';
-        ctx.strokeStyle = ghostValid ? 'rgba(63,185,80,0.8)' : 'rgba(248,81,73,0.8)';
-        ctx.lineWidth = 1.5;
-        ctx.fillRect(x, y, CELL, CELL);
-        ctx.strokeRect(x, y, CELL, CELL);
-
-        // Ghost range ring
-        const def = TOWER_DEFS[selectedTowerType];
         const cx = ghostCol * CELL + CELL / 2;
         const cy = ghostRow * CELL + CELL / 2;
+
+        // Get range from selected slot's config
+        let towerRange = 110;
+        if (this.selectedSlotId) {
+            const slot = this.trainer.getSlot(this.selectedSlotId);
+            if (slot?.starterKey && STARTER_TOWER_CONFIG[slot.starterKey]) {
+                towerRange = STARTER_TOWER_CONFIG[slot.starterKey].range;
+            }
+        }
+
+        ctx.save();
+
+        // Range circle (behind the cell highlight)
         ctx.beginPath();
-        ctx.arc(cx, cy, def.range, 0, Math.PI * 2);
-        ctx.strokeStyle = ghostValid ? 'rgba(63,185,80,0.4)' : 'rgba(248,81,73,0.3)';
-        ctx.setLineDash([4, 4]);
+        ctx.arc(cx, cy, towerRange, 0, Math.PI * 2);
+        ctx.fillStyle = ghostValid
+            ? 'rgba(63,185,80,0.07)'
+            : 'rgba(248,81,73,0.06)';
+        ctx.fill();
+        ctx.strokeStyle = ghostValid
+            ? 'rgba(63,185,80,0.45)'
+            : 'rgba(248,81,73,0.45)';
+        ctx.lineWidth = 1.3;
+        ctx.setLineDash([6, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Emoji ghost
-        ctx.globalAlpha = 0.7;
-        ctx.font = `${Math.floor(CELL * 0.55)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(def.emoji, cx, cy + 1);
+        // Cell highlight
+        ctx.fillStyle = ghostValid ? 'rgba(63,185,80,0.22)' : 'rgba(248,81,73,0.22)';
+        ctx.strokeStyle = ghostValid ? 'rgba(63,185,80,0.9)' : 'rgba(248,81,73,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(ghostCol * CELL, ghostRow * CELL, CELL, CELL);
+        ctx.strokeRect(ghostCol * CELL, ghostRow * CELL, CELL, CELL);
 
+        ctx.restore();
+    }
+
+    _drawPokeballCursor(ctx, x, y) {
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        const r = 14;
+        ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.fillStyle = '#f04040'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = '#222'; ctx.lineWidth = r * 0.12;
+        ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r * 0.3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
         ctx.restore();
     }
 
     _drawDebugOverlay(ctx) {
         ctx.save();
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(4, 4, 200, 80);
+        ctx.fillRect(4, 4, 220, 100);
         ctx.fillStyle = '#0f0';
         ctx.font = '11px monospace';
         ctx.fillText(`Enemies:     ${this.enemies.length}`, 10, 20);
         ctx.fillText(`Projectiles: ${this.projectiles.length}`, 10, 35);
         ctx.fillText(`Particles:   ${this.particles.length}`, 10, 50);
         ctx.fillText(`Towers:      ${this.towers.length}`, 10, 65);
+        ctx.fillText(`Wave:        ${this.waveSystem.waveNumber} (running:${this.waveSystem.isRunning})`, 10, 80);
         ctx.restore();
     }
 
-    reset() {
-        this.money = START_MONEY;
-        this.lives = START_LIVES;
+    // ─── Reset ────────────────────────────────────────────────────────────────
+
+    reset(trainerSystem) {
+        this.trainer = trainerSystem;
         this.towers = [];
         this.enemies = [];
         this.projectiles = [];
         this.particles = [];
-        this._pendingWaveBonus = 0;
         this.occupiedCells.clear();
         this.waveSystem.reset();
-        this.selectedTowerType = null;
+        this.selectedSlotId = null;
         this.selectedTower = null;
-        this.ui.clearTowerSelection();
-        this.ui.hideTowerInfo();
         this._deselectTower();
         this._buildBackground();
         this._updateHUD();
+        this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
+        this.ui.updatePokedex(this.trainer.pokedex);
     }
 }

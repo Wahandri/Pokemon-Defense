@@ -22,15 +22,20 @@ function pokeball(ctx, x, y, r, topColor = '#f04040', bottomColor = '#fff', flas
 // ─── Base Projectile ──────────────────────────────────────────────────────────
 
 export class Projectile {
-    constructor({ x, y, damage, speed, color = '#f04040' }) {
+    constructor({ x, y, damage, speed, color = '#f04040', attackerType = null, attacker = null }) {
         this.x = x; this.y = y; this.vx = 0; this.vy = 0;
         this.damage = damage; this.speed = speed; this.color = color;
+        this.attackerType = attackerType;  // for type effectiveness
+        this.tower = attacker;             // PokemonTower reference for XP
+        this._typeEffMult = 1.0;
         this.dead = false; this.radius = 6;
         this.isAoe = false; this.areaRadius = 0;
         this.pierceCount = 0; this._pierced = 0;
         this._hitEnemies = new Set();
     }
-    onHit(enemy, allEnemies) { enemy.takeDamage(this.damage); this.dead = true; }
+    _effectiveDamage() { return this.damage * this._typeEffMult; }
+    // Pass the tower (not this projectile) as lastAttacker so XP routing works
+    onHit(enemy, allEnemies) { enemy.takeDamage(this._effectiveDamage(), this.tower ?? this); this.dead = true; }
     update(dt) { }
     draw(ctx) { }
 }
@@ -38,8 +43,8 @@ export class Projectile {
 // ─── Dart → Standard Pokéball ─────────────────────────────────────────────────
 
 export class DartProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed }) {
-        super({ x, y, damage, speed });
+    constructor({ x, y, target, damage, speed, attackerType }) {
+        super({ x, y, damage, speed, attackerType });
         this.target = target; this.radius = 6;
         this._rot = Math.random() * Math.PI * 2;
     }
@@ -62,8 +67,8 @@ export class DartProjectile extends Projectile {
 // ─── Cannon → Heavy Pokéball (arcing AoE) ─────────────────────────────────────
 
 export class CannonProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, areaRadius }) {
-        super({ x, y, damage, speed }); this.isAoe = true; this.areaRadius = areaRadius;
+    constructor({ x, y, target, damage, speed, areaRadius, attackerType }) {
+        super({ x, y, damage, speed, attackerType }); this.isAoe = true; this.areaRadius = areaRadius;
         this.target = target; this.radius = 9;
         this._startX = x; this._startY = y; this._progress = 0;
         this._totalDist = dist(x, y, target.x, target.y); this._arcH = 45;
@@ -71,7 +76,7 @@ export class CannonProjectile extends Projectile {
     }
     onHit(enemy, all) {
         for (const e of all) {
-            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this.damage);
+            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this._effectiveDamage(), this);
         }
         this.dead = true;
     }
@@ -101,12 +106,12 @@ export class CannonProjectile extends Projectile {
 // ─── Ice → Dive Ball (slow) ───────────────────────────────────────────────────
 
 export class IceProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, slowAmount, slowDuration }) {
-        super({ x, y, damage, speed }); this.target = target;
+    constructor({ x, y, target, damage, speed, slowAmount, slowDuration, attackerType }) {
+        super({ x, y, damage, speed, attackerType }); this.target = target;
         this.slowAmount = slowAmount; this.slowDuration = slowDuration;
         this.radius = 6; this._rot = 0;
     }
-    onHit(enemy, _all) { enemy.takeDamage(this.damage); enemy.applySlow(this.slowAmount, this.slowDuration); this.dead = true; }
+    onHit(enemy, _all) { enemy.takeDamage(this._effectiveDamage(), this); enemy.applySlow(this.slowAmount, this.slowDuration); this.dead = true; }
     update(dt) {
         if (this.target.dead && !this.target.reached) { this.dead = true; return; }
         const dx = this.target.x - this.x, dy = this.target.y - this.y;
@@ -126,8 +131,8 @@ export class IceProjectile extends Projectile {
 // ─── Sniper → Master Ball ─────────────────────────────────────────────────────
 
 export class SniperProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed }) {
-        super({ x, y, damage, speed }); this.target = target; this.radius = 5;
+    constructor({ x, y, target, damage, speed, attackerType }) {
+        super({ x, y, damage, speed, attackerType }); this.target = target; this.radius = 5;
         const dx = target.x - x, dy = target.y - y, d = Math.sqrt(dx * dx + dy * dy) || 1;
         this.vx = (dx / d) * speed; this.vy = (dy / d) * speed;
         this._trail = []; this._rot = 0;
@@ -157,8 +162,8 @@ export class SniperProjectile extends Projectile {
 // ─── Laser → Quick Ball (pierce) ──────────────────────────────────────────────
 
 export class LaserProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, pierceCount }) {
-        super({ x, y, damage, speed }); this.target = target;
+    constructor({ x, y, target, damage, speed, pierceCount, attackerType }) {
+        super({ x, y, damage, speed, attackerType }); this.target = target;
         this.pierceCount = pierceCount; this.radius = 5;
         const dx = target.x - x, dy = target.y - y, d = Math.sqrt(dx * dx + dy * dy) || 1;
         this.vx = (dx / d) * speed; this.vy = (dy / d) * speed;
@@ -167,7 +172,7 @@ export class LaserProjectile extends Projectile {
     onHit(enemy, _all) {
         if (this._hitEnemies.has(enemy)) return;
         this._hitEnemies.add(enemy);
-        enemy.takeDamage(this.damage);
+        enemy.takeDamage(this._effectiveDamage(), this);
         this._pierced++;
         if (this._pierced >= this.pierceCount) this.dead = true;
     }
@@ -195,15 +200,15 @@ export class LaserProjectile extends Projectile {
 // ─── Mortar → Beast Ball (huge AoE arc) ───────────────────────────────────────
 
 export class MortarShell extends Projectile {
-    constructor({ x, y, tx, ty, damage, speed, areaRadius }) {
-        super({ x, y, damage, speed }); this.isAoe = true; this.areaRadius = areaRadius;
+    constructor({ x, y, tx, ty, damage, speed, areaRadius, attackerType }) {
+        super({ x, y, damage, speed, attackerType }); this.isAoe = true; this.areaRadius = areaRadius;
         this.radius = 11; this._startX = x; this._startY = y;
         this._tx = tx; this._ty = ty; this._progress = 0;
         this._arcH = 90; this._totalDist = Math.max(50, dist(x, y, tx, ty)); this._rot = 0;
     }
     onHit(enemy, all) {
         for (const e of all) {
-            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this.damage);
+            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this._effectiveDamage(), this);
         }
         this.dead = true;
     }

@@ -1,491 +1,163 @@
-# README-IA — Team Rocket Defense
-> **Documento de contexto para agentes de código**
-> Última actualización: 2026-03-05 | Stack: Vanilla JS (ES Modules) + Canvas 2D
+# Entrenador Pokémon: Atrápalos a todos — README-IA
+
+> **Fecha de refactor:** 2026-03-05  
+> **Engine:** Vanilla JS ES Modules + Canvas 2D (sin bundler, sin npm)  
+> **Servidor:** `python3 -m http.server 8181 --directory .`
 
 ---
 
-## 1. Resumen del Proyecto
+## Concepto del juego
 
-**Team Rocket Defense** es un videojuego Tower Defense de temática Pokémon que corre en el navegador sin ningún framework ni build step. El jugador controla al Team Rocket: coloca agentes (torres) que lanzan Pokéballs para capturar Pokémon (enemigos) antes de que escapen por el camino.
+Eres un Entrenador Pokémon en la región de Kanto. Pokémon silvestres recorren la ruta. Tu objetivo es **debilitarlos** con tus Pokémon aliados colocados como torres, y luego **capturarlos** con Pokébolas arrastradas. El objetivo final es completar la **Pokédex de la Gen 1** (151 Pokémon).
 
-- **Servidor de desarrollo**: `python3 -m http.server 8181 --directory .` → abre en `http://localhost:8181`
-- **No hay bundler** (webpack, vite, etc.) — ES modules nativos cargados directamente desde `index.html`
-- **No hay dependencias npm** — cero `node_modules`
-- **Todo el arte** es canvas 2D puro + sprites de PokeAPI CDN (no hay archivos de imagen locales)
+No hay vidas, no hay dinero. Solo XP, Pokébolas y la Pokédex.
 
 ---
 
-## 2. Árbol de Ficheros
+## Sistemas principales
 
-```
-DefenseGame/
-├── index.html                  ← UI completa (HTML + CSS + <script type="module">)
-├── README-IA.md                ← Este documento
-└── src/
-    ├── main.js                 ← Entry point (bootstraps Game)
-    ├── data/
-    │   ├── balance.js          ← ÚNICA FUENTE DE VERDAD de todas las stats
-    │   ├── pokemon.js          ← Pools de Pokémon por tier + URLs de sprites
-    │   ├── waves.js            ← Definición de 25 oleadas predefinidas
-    │   └── maps.js             ← Waypoints del mapa (píxeles absolutos)
-    ├── entities/
-    │   ├── Enemy.js            ← Clase Enemy (Pokémon) + createEnemy()
-    │   ├── Tower.js            ← 6 clases de torres TR + createTower()
-    │   ├── Projectile.js       ← 6 variantes de Pokéball + Projectile base
-    │   └── Particle.js         ← Sistema de partículas + efectos de captura
-    ├── game/
-    │   ├── Game.js             ← Máquina de estados + main loop rAF
-    │   └── ScenePlay.js        ← Escena de juego (lógica principal)
-    ├── systems/
-    │   ├── PathSystem.js       ← Waypoints → posición, celdas bloqueadas
-    │   ├── WaveSystem.js       ← Spawner de oleadas (predefinidas + procedurales)
-    │   └── Collision.js        ← Detección de colisiones proyectil↔enemigo
-    └── utils/
-        ├── constants.js        ← CANVAS_W/H, CELL, COLS, ROWS, enums
-        ├── math.js             ← dist, lerp, clamp, pixelToGrid, etc.
-        ├── storage.js          ← localStorage: bestScore, lastSpeed
-        └── ImageCache.js       ← Cache de imágenes async (Promise-based)
-```
+### TrainerSystem (`src/systems/TrainerSystem.js`)
+- `level` — nivel del entrenador  
+- `xp / xpToNext` — experiencia acumulada y umbral de subida  
+- `pokeballs` — conteo de Pokébolas disponibles (se usan en captura)  
+- `rareCandy` — bonus cosmético (gana uno cada 3 niveles)  
+- `pokedex` — `Map<id, {name, count}>` de Pokémon capturados  
+- `backpack` — array de slots `{id, pokemonId, name, pokemonType, placed}` — Pokémon disponibles para colocar como torres  
 
----
+### WaveSystem (`src/systems/WaveSystem.js`)
+- **Completamente procedural** — sin tabla de oleadas fija.
+- Ronda 1 → 1 Pokémon; Ronda 2 → 2; escala suavemente hasta ~15 máx.  
+- Desbloqueo de tiers por ronda: Tier1 desde R1, Tier2 desde R3, Tier3 desde R6, Tier4 desde R10.  
+- **Bonus perfecto:** si ningún Pokémon escapa al final de la ronda → `+1 Pokébola`.  
+- Rastrea `_escapedThisRound` — incrementado por `ScenePlay` cuando un enemigo llega al final.
 
-## 3. Arquitectura General
+### Sistema de captura (`ScenePlay.throwPokeball`)
+1. El jugador hace **mousedown sobre el canvas** cuando hay Pokémon debilitados.
+2. Arrastra la Pokébola (se dibuja como cursor en canvas).
+3. Al soltar **mouseup** → se busca el Pokémon debilitado más cercano (radio 45px).
+4. Si hay objetivo: `pokeballs--`, `enemy.capture()`, se registra en Pokédex, se añade a la mochila, se otorga XP.
+5. Si no hay objetivo: la Pokébola se consume con mensaje de fallo.
 
-### Flujo de arranque
+### Mochila vs Pokédex
+| Concepto | Descripción |
+|----------|-------------|
+| **Pokédex** | Registro histórico de capturados (1 entrada por especie) — 0/151 |
+| **Mochila** | Pokémon activos disponibles como torres — 1 por slot |
 
-```
-index.html
-  └─ <script type="module" src="src/main.js">
-       └─ new Game()
-            ├─ Canvas setup (960×540)
-            ├─ new UI()              ← agarra todos los DOM ids
-            ├─ _bindInput()          ← keyboard + mouse en canvas
-            ├─ showMenu()
-            └─ requestAnimationFrame → _loop()
-                   ├─ dt = (timestamp - lastTime) * speed   (cap 100ms)
-                   ├─ scene.update(dt)    [si PLAYING]
-                   └─ _render()
-```
+Un Pokémon capturado se añade **a la mochila** con un slot propio, y puede colocarse en el mapa como torre.
 
-### Máquina de estados (`Game.state`)
+### Torres = Pokémon (`src/entities/PokemonTower.js`)
+- Solo pueden colocarse/recogerse cuando la ronda **NO está en curso**.
+- Click derecho o botón "Recuperar" en panel → devuelve el Pokémon a la mochila.
+- Cada torre tiene `pokemonType` (fuego / agua / planta / ...) para efect. de tipos.
 
-```
-MENU → [click INICIAR] → PLAYING → [vidas <= 0] → GAME_OVER → [click] → PLAYING
-                                 ↕ (P / btn-pause)
-                               PAUSED
-```
+### Efectividad de tipos (`src/data/balance.js → TYPE_CHART`)
+| Atacante | Defensor | Multiplicador |
+|----------|---------|--------------|
+| Fuego    | Planta  | ×1.5 |
+| Planta   | Agua    | ×1.5 |
+| Agua     | Fuego   | ×1.5 |
+| Agua     | Planta  | ×0.65 |
+| Fuego    | Agua    | ×0.65 |
+| Planta   | Fuego   | ×0.65 |
+| Cualquier | Cualquier (neutro) | ×1.0 |
 
-### Loop de juego (`ScenePlay.update(dt)`)
-
-```
-1. WaveSystem.update(dt)       → spawna enemigos según timers
-2. enemies[].update(dt)        → avanza por el path; si reached → quita vida
-3. towers[].update(dt, ...)    → detecta target, emite proyectiles
-4. projectiles[].update(dt)    → mueve proyectiles
-5. Collision.check(projs, enemies)  → onHit → enemy.takeDamage()
-6. Loop de recompensas         → si dead && captured → money++, Pokédex++
-7. particles[].update(dt)
-8. Limpieza de arrays (filter dead)
-9. Wave-clear bonus            → si !isRunning && enemies.length === 0
-10. _updateHUD()
-11. Chequeo de game over
-```
+El multiplicador se aplica en `Collision.check()` antes de llamar a `takeDamage()`.
 
 ---
 
-## 4. Constantes Globales (`utils/constants.js`)
+## Estado WEAKENED (debilitado)
 
-| Constante | Valor | Descripción |
-|---|---|---|
-| `CANVAS_W` | `960` | Ancho del canvas en px |
-| `CANVAS_H` | `540` | Alto del canvas en px |
-| `CELL` | `32` | Tamaño de celda de grid en px |
-| `COLS` | `30` | `CANVAS_W / CELL` |
-| `ROWS` | `16` | `CANVAS_H / CELL` |
-| `PATH_WIDTH` | `52` | Anchura del camino en px |
-
-**Enums relevantes:**
-```js
-ENEMY_TYPE = { RED:'red', BLUE:'blue', GREEN:'green', T4:'t4', BOSS:'boss' }
-TOWER_TYPE  = { DART:'dart', CANNON:'cannon', ICE:'ice', SNIPER:'sniper', LASER:'laser', MORTAR:'mortar' }
-STATE       = { MENU, PLAYING, PAUSED, GAME_OVER }
-```
+Cuando el HP de un enemigo llega a 0, **NO muere** — entra en estado `weakened`:
+- Velocidad reducida al 30%
+- Aura amarilla pulsante + texto **"ATRÁPALO!"**
+- Las torres ya no lo atacan
+- Si llega al final del camino en estado debilitado → **escapa** (se conta como escape)
+- Solo el jugador puede capturarlo con una Pokébola
 
 ---
 
-## 5. Sistema de Camino (`PathSystem`)
+## Economía del juego
 
-El mapa usa **waypoints en coordenadas de píxel** (no de grid). El sistema:
+| Recurso | Fuente | Uso |
+|---------|--------|-----|
+| Pokébolas | Inicio: 3; +1 por ronda perfecta; posible drop futuro | Captura Pokémon debilitados |
+| XP | +10/20/40/80 por captura (según tier) | Subir nivel del entrenador |
+| RareCandy | +1 cada 3 niveles | Cosmético actualmente |
 
-1. **Precalcula** las longitudes de cada segmento y la longitud total del path.
-2. Convierte un valor escalar `progress ∈ [0, totalLength]` en `{x, y, angle}` mediante interpolación lineal segmento a segmento.
-3. **Rasteriza** el path sobre el grid: marca celdas como `blockedCells` para impedir colocar torres encima del camino.
-
-### Waypoints de MAP1 ("Cañada Verde")
-
-```
-(0,100) → (200,100) → (200,260) → (480,260) → (480,100) → (720,100) → (720,420) → (480,420) → (480,540-exit)
-```
-El camino tiene forma de **S invertida** con entrada por el borde izquierdo y salida por el borde inferior.
-
-### Movimiento de enemigos
-
-```js
-// En Enemy.update(dt):
-this.speed = this.baseSpeed * this._slowAmount;      // 1.0 = velocidad normal
-this.progress += this.speed * (dt / 1000);           // progreso en px/s
-const pos = pathSystem.getPositionAt(this.progress);
-this.x = pos.x;  this.y = pos.y;
-```
-
-Cuando `this.progress >= pathSystem.totalLength` → el enemigo llegó: `reached = dead = true`.
+No hay dinero ni vidas. No hay penalización por escapes.
 
 ---
 
-## 6. Matemática de Escalado (la curva exponencial)
+## Archivos modificados
 
-### HP de enemigos
-
-```
-HP(wave) = max(1, round(HP_base × HP_SCALE^(wave - 1)))
-```
-
-- `HP_SCALE = 1.18` → **+18% de vida por oleada**
-- Referencia numérica (tipo `red`, HP_base=10):
-
-| Oleada | HP calc | HP real |
-|---|---|---|
-| 1 | 10 × 1.18⁰ = 10 | 10 |
-| 5 | 10 × 1.18⁴ ≈ 19.4 | 19 |
-| 10 | 10 × 1.18⁹ ≈ 44.2 | 44 |
-| 15 | 10 × 1.18¹⁴ ≈ 100.7 | 101 |
-| 20 | 10 × 1.18¹⁹ ≈ 229.4 | 229 |
-| 25 | 10 × 1.18²⁴ ≈ 522.4 | 522 |
-
-> ⚠️ Un `HP_SCALE` entre **1.10–1.25** es el rango razonable. Por encima de 1.30 los enemigos se vuelven imposibles de matar después de la oleada 20 sin upgrades.
-
-### Recompensa de captura
-
-```
-reward(wave) = max(reward_base, round(HP(wave) × REWARD_FACTOR))
-```
-
-- `REWARD_FACTOR = 0.28` → la recompensa escala con la dificultad del enemigo
-- Esto mantiene el balance automáticamente: cuanto más duro el Pokémon, más dinero da.
-
-### Bonus de oleada completada
-
-```
-waveBonus(wave) = WAVE_BONUS_BASE + wave × WAVE_BONUS_PER_WAVE
-     = 15 + wave × 6
-```
-
-| Oleada | Bonus |
-|---|---|
-| 1 | $21 |
-| 5 | $45 |
-| 10 | $75 |
-| 20 | $135 |
-
-### Slow de Jessie
-
-```
-efectiveSpeed = baseSpeed × slowAmount
-// donde slowAmount ∈ (0,1). Default = 0.38 → el Pokémon va al 38% de velocidad.
-// Upgrades reducen slowAmount: min permitido = 0.05 (5% = casi parado)
-```
-
-### Oleadas procedurales (wave > 25)
-
-```js
-extra = waveNum - 25
-base  = floor(12 + extra * 2.8 + (extra * 0.07)²)
-delay = max(180, 580 - extra * 7)   // ms entre spawns
-```
-
-El cuadrado `(extra * 0.07)²` añade aceleración cuadrática al conteo de enemigos, haciendo que las oleadas tardías sean exponencialmente más densas.
+| Archivo | Cambio |
+|---------|--------|
+| `src/data/balance.js` | Eliminado dinero/vidas; añadido TYPE_CHART, STARTER_TOWER_CONFIG, XP_PER_TIER |
+| `src/data/maps.js` | Camino extendido de 9 a 16 waypoints |
+| `src/data/pokemon.js` | Solo Gen 1 (≤151); añadido POKEMON_TYPE map |
+| `src/data/waves.js` | Sin cambios (ya no se importa) |
+| `src/systems/TrainerSystem.js` | ✨ NUEVO — level/xp/pokéballs/backpack/pokédex |
+| `src/systems/WaveSystem.js` | Reescrito — procedural, sin WAVES fijas, escape tracking |
+| `src/systems/Collision.js` | Añadida efect. de tipos + findWeakened() |
+| `src/entities/Enemy.js` | WEAKENED state, sprites más grandes, sin nombre flotante |
+| `src/entities/PokemonTower.js` | ✨ NUEVO — torres son Pokémon |
+| `src/entities/Projectile.js` | Añadido attackerType + _typeEffMult |
+| `src/game/ScenePlay.js` | Reescrito — nueva economía, captura, rounds |
+| `src/game/Game.js` | Reescrito — TrainerSystem, starter selection, pokéball drag |
+| `src/ui/UI.js` | Reescrito — HUD nuevo, backpack dinámico |
+| `index.html` | Reescrito — tema verde, HUD nuevo, starter selection, canvas responsive |
 
 ---
 
-## 7. Tiers de Pokémon (Enemigos)
+## Instrucciones de prueba (3 pasos)
 
-| Key | Tier | Label | HP base | Speed | Daño | Reward base | Radio |
-|---|---|---|---|---|---|---|---|
-| `red` | 1 | Común ★ | 10 | 92 | 1 | $3 | 18px |
-| `blue` | 2 | Poco Común ★★ | 28 | 65 | 1 | $7 | 20px |
-| `green` | 3 | Raro ★★★ | 60 | 112 | 2 | $14 | 20px |
-| `t4` | 4 | Épico ★★★★ | 200 | 55 | 3 | $50 | 22px |
-| `boss` | 5 | Legendario ★★★★★ | 1500 | 45 | 5 | $400 | 28px |
-
-> `speed` está en px/s. Con path de ~1800px de largo, un T1 tarda ~19s en cruzar; un boss ~40s.
-
-### Sprite loading
-
-```js
-// En Enemy constructor:
-this._spriteUrl = getSpriteUrl(this.pokemonId);
-// → https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{id}.png
-ImageCache.load(url).then(img => { this._img = img; });
+### 1. Iniciar + Starter + Colocar torre
 ```
+http://localhost:8181
+```
+- Elige un starter → "INICIAR AVENTURA"
+- Haz clic en el starter en la **Mochila** (barra izquierda) para seleccionarlo
+- Haz clic en el mapa (zona verde, fuera del camino) para colocarlo
+- Verifica HUD: Level=1, XP=0/120, Pokébolas=3, RareCandy=0
 
-Si el CDN no responde (`img.onerror`), `_img = null` y se dibuja un **círculo de fallback** con el `#id` del Pokémon.
+### 2. Ronda, debilitar, capturar
+- Haz clic en "LANZAR RONDA 1"
+- La torre ataca a los Pokémon salvajes
+- Cuando el HP llega a 0 → aura amarilla + "ATRÁPALO!"
+- **Haz mousedown en el canvas** (o en el icono 🔴 del HUD) y **arrastra sobre el Pokémon debilitado**
+- Al soltar → captura: Pokébolas-1, aparece en Pokédex y Mochila
+
+### 3. Escapar + Bonus perfecto
+- Si un Pokémon debilitado llega al final → Escapa sin penalización de vidas
+- Si al terminar la ronda **capturaste todos** → mensaje "+1 Pokébola" automático
+- Comprueba que el contador de Pokébolas aumenta
 
 ---
 
-## 8. Torres (Team Rocket Trainers)
+## Arquitectura
 
-### Tabla de torres
-
-| Key | Trainer | Tipo | Costo | Damage | Range | FireRate | Especial |
-|---|---|---|---|---|---|---|---|
-| `dart` | Grunt ♀ | Single target | $100 | 10 | 130px | 1.2/s | — |
-| `cannon` | Grunt ♂ | AoE | $175 | 55 | 120px | 0.35/s | área Ø120px |
-| `ice` | Jessie | Slow | $120 | 5 | 110px | 0.65/s | slow 38%, 2.2s |
-| `sniper` | James | Long-range | $250 | 80 | 320px | 0.45/s | — |
-| `laser` | Meowth | Pierce | $300 | 8 | 180px | 4.0/s | penetra ×3 |
-| `mortar` | Giovanni | AoE arco | $400 | 140 | 350px | 0.22/s | área Ø180px, sin LOS |
-
-### Targeting
-
-Todas las torres usan **"primero el más avanzado"** (`Find max progress in range`):
-
-```js
-_findTarget(enemies) {
-    let best = null, bestProg = -1;
-    for (const e of enemies) {
-        if (e.dead) continue;
-        if (dist(this.x, this.y, e.x, e.y) <= this.range && e.progress > bestProg) {
-            best = e; bestProg = e.progress;
-        }
-    }
-    return best;
-}
 ```
-
-### Sistema de upgrades (`applyMod`)
-
-```js
-// balance.js — mod puede tener: mul, add, min, max
-function applyMod(value, mod) {
-    if (mod.mul !== undefined) v *= mod.mul;   // multiplicar
-    if (mod.add !== undefined) v += mod.add;   // sumar
-    if (mod.min !== undefined) v = max(min, v); // clamp inferior
-    if (mod.max !== undefined) v = min(max, v); // clamp superior
-}
-// Ejemplo: slow upgrade { add: -0.12, min: 0.12 }
-// → slowAmount = max(0.38 - 0.12, 0.12) = 0.26
+src/
+├── data/
+│   ├── balance.js      — stats, type chart, starter configs
+│   ├── maps.js         — waypoints del camino (Gen 1 / Kanto)
+│   ├── pokemon.js      — pools Gen 1, POKEMON_TYPE map
+│   └── waves.js        — obsoleto (no se importa)
+├── entities/
+│   ├── Enemy.js        — Pokémon enemigos, WEAKENED state
+│   ├── Particle.js     — efectos visuales captura
+│   ├── PokemonTower.js — torres = Pokémon del entrenador
+│   └── Projectile.js   — pokébolas con attackerType
+├── game/
+│   ├── Game.js         — init, loop, starter selection, drag
+│   └── ScenePlay.js    — main scene, captura, rondas
+├── systems/
+│   ├── Collision.js    — hit detection + type multiplier
+│   ├── PathSystem.js   — sin cambios
+│   ├── TrainerSystem.js— ✨ NUEVO — todo el estado del entrenador
+│   └── WaveSystem.js   — rondas procedurales
+├── ui/
+│   └── UI.js           — HUD, backpack dinámico, pokédex
+└── utils/              — sin cambios
 ```
-
-Cada torre tiene 2 niveles de upgrades. Cada nivel ofrece 2 opciones (A/B), el jugador elige 1.
-
-### Sell value
-
-```js
-getSellValue() = floor(totalCost × 0.6)  // 60% de reembolso
-```
-
----
-
-## 9. Proyectiles (Pokéballs)
-
-| Clase | Torre | Pokéball | Comportamiento |
-|---|---|---|---|
-| `DartProjectile` | Grunt ♀ | Standard (roja/blanca) | Homing, single hit |
-| `CannonProjectile` | Grunt ♂ | Heavy Ball (roja oscura/gris) | Arco + AoE splash en impacto |
-| `IceProjectile` | Jessie | Dive Ball (azul/celeste) | Homing + aplica slow al impactar |
-| `SniperProjectile` | James | Master Ball-ish (púrpura) | Velocidad lineal + trail visual |
-| `LaserProjectile` | Meowth | Quick Ball (amarillo/negro) | Velocidad lineal + pierce N enemigos |
-| `MortarShell` | Giovanni | Beast Ball (teal/oscuro) | Arco hacia punto fijo + AoE splash |
-
-Todos los proyectiles giran (`this._rot += dt * factor`) mientras vuelan, dando efecto de Pokéball real.
-
----
-
-## 10. Sistema de Colisiones
-
-Detección por **distancia euclidiana²** (sin raíz cuadrada cuando es posible):
-
-```js
-if (dx*dx + dy*dy < (proj.radius + enemy.radius)²) → hit
-```
-
-- Proyectiles de pierce (`LaserProjectile`, `CannonProjectile`) guardan `_hitEnemies: Set` para no impactar dos veces al mismo enemigo.
-- `onHit(enemy, allEnemies)` recibe todos los enemigos para permitir AoE sin un segundo pass.
-
----
-
-## 11. Sistema de Partículas
-
-Tres funciones generadoras:
-
-| Función | Uso | Partículas |
-|---|---|---|
-| `spawnDeathParticles(x,y,color,count)` | Muerte genérica | Círculos con gravedad |
-| `spawnCaptureEffect(x,y,pokemonColor)` | Captura normal | Pokéballs rojas + estrellas gold + polvo del color del Pokémon |
-| `spawnLegendaryCaptureEffect(x,y)` | Boss capturado | 3 anillos × 16 partículas (gold, blanco, naranja) |
-
-Física de partículas:
-```js
-update(dt):
-    x += vx * (dt/1000)
-    y += vy * (dt/1000)
-    vy += 120 * (dt/1000)   // gravedad constante
-    life -= dt
-    // tamaño y opacidad decaen con life/maxLife
-```
-
----
-
-## 12. Pokédex
-
-`ScenePlay` mantiene `this.pokedex = new Map<pokemonId, {name, type, color, count}>`.
-
-Al capturar un enemigo:
-```js
-if (pokedex.has(pid)) {
-    pokedex.get(pid).count++;
-} else {
-    pokedex.set(pid, { name, type, color, count: 1 });
-}
-ui.updatePokedex(pokedex);          // actualiza el grid del DOM
-ui.showMessage("¡Pokémon capturado!");
-```
-
-`UI.updatePokedex()` reconstruye el grid completo con `<img>` tags usando `getSpriteUrl(id)`.
-
----
-
-## 13. UI — IDs del DOM
-
-Todos los elementos UI importantes tienen IDs explícitos. La clase `UI` los agarra en el constructor:
-
-| ID | Descripción |
-|---|---|
-| `val-money`, `val-lives`, `val-wave`, `val-enemies` | Displays del HUD |
-| `btn-start-wave` | Botón "Lanzar Operación N" |
-| `btn-pause`, `btn-reset` | Controles |
-| `btn-speed1`, `btn-speed2`, `btn-speed4` | Multiplicadores de velocidad |
-| `tower-btn-{dart,cannon,ice,sniper,laser,mortar}` | Botones de selección de torre |
-| `tower-info` | Panel de info de torre seleccionada (toggle `visible`) |
-| `tower-info-icon`, `tower-info-name`, `tower-info-level` | Header del panel |
-| `tower-stats` | Grid de stats (innerHTML reconstruido) |
-| `upgrade-btns` | Contenedor de botones de upgrade |
-| `btn-sell` | Botón de vender torre |
-| `pokedex-grid` | Grid de imágenes del Pokédex |
-| `pokedex-count` | Counter "N capturados" |
-| `menu-overlay` | Overlay de menú principal / game over |
-| `paused-banner` | Banner "PAUSADO" |
-| `msg` | Toast de mensajes (class `show` para mostrar) |
-| `game-canvas` | Canvas principal |
-
----
-
-## 14. Persistencia (`storage.js`)
-
-```js
-localStorage key: 'towerDefense_v1'
-Datos guardados: { bestScore: number, highestWave: number, lastSpeed: 1|2|4 }
-```
-
-Se guarda automáticamente al cambiar la velocidad o al terminar la partida.
-
----
-
-## 15. Cómo Añadir Contenido
-
-### Añadir un nuevo Pokémon a un tier existente
-
-En `src/data/pokemon.js`:
-```js
-red: [
-    { id: 129, name: 'Magikarp' },
-    { id: 25, name: 'Pikachu' },  // ← añadir aquí
-]
-```
-
-### Añadir una nueva oleada
-
-En `src/data/waves.js`:
-```js
-import { ENEMY_TYPE } from '../utils/constants.js';
-const { RED, BLUE, GREEN, T4, BOSS } = ENEMY_TYPE;
-
-// Formato: [{ type, count, delay(ms entre spawns) }, ...]
-/* 26 */ [{ type: T4, count: 8, delay: 1200 }, { type: BOSS, count: 1, delay: 6000 }],
-```
-
-### Añadir una nueva torre
-
-1. **`balance.js`** → Añadir entrada a `TOWER_CONFIG` con todas las stats + upgrades.
-2. **`Tower.js`** → Crear clase que extiende `Tower`, implementar `_shoot()` y `_drawTurret()`.
-3. **`Tower.js`** → Añadir `case 'miTorre'` en `createTower()`.
-4. **`Projectile.js`** → Crear nuevo proyectil si hace falta, o reutilizar uno existente.
-5. **`index.html`** → Añadir `<button class="tower-btn" id="tower-btn-miTorre">` en `#tower-buttons`.
-6. **`ScenePlay.js`** → Añadir `'miTorre'` al array `towerKeys` en `_bindUI()`.
-7. **`UI.js`** → Añadir `miTorre: document.getElementById('tower-btn-miTorre')` en `this.towerBtns`.
-
-### Modificar la curva de dificultad
-
-Solo editar `src/data/balance.js`:
-```js
-export const HP_SCALE = 1.18;       // < 1.10 = fácil, > 1.25 = muy difícil
-export const REWARD_FACTOR = 0.28;  // ajusta si los jugadores acumulan mucho dinero
-export const START_MONEY = 200;     // dinero inicial
-export const START_LIVES = 20;      // vidas iniciales
-```
-
-### Añadir un nuevo mapa
-
-1. **`maps.js`** → Crear nueva entrada con `{ name, waypoints[], bgColor, pathColor }`.
-2. **`ScenePlay.js`** → Cambiar `this.map = MAP1` por la selección dinámica.
-3. **`ScenePlay._buildBackground()`** → El fondo se genera proceduralmente, no necesita assets.
-
----
-
-## 16. Patrones de Código Comunes
-
-### Patrón delta-time (todos los valores son por segundo)
-
-```js
-// Velocidad en px/s, nunca en px/frame
-this.x += vx * (dt / 1000);
-```
-
-### Patrón "limpiar muertos al final del frame"
-
-```js
-this.enemies     = this.enemies.filter(e => !e.dead);
-this.projectiles = this.projectiles.filter(p => !p.dead);
-this.particles   = this.particles.filter(p => !p.dead);
-```
-> **NUNCA** eliminar entidades dentro de los loops de update — puede causar skip de frames y bugs de colisión.
-
-### Patrón de canvas save/restore
-
-Toda función `draw()` hace `ctx.save()` al inicio y `ctx.restore()` al final para no contaminar el estado global del canvas.
-
-### Key de celda ocupada
-
-```js
-// Formato: "col_row" como string
-this.occupiedCells.add(`${col}_${row}`);
-this.occupiedCells.has(`${col}_${row}`);
-```
-
----
-
-## 17. FAQ para Agentes IA
-
-**¿Dónde están los CSS?** — Todo el CSS está en `<style>` dentro de `index.html` (líneas ~12-653). No hay archivos `.css` separados.
-
-**¿Por qué no hay build step?** — Diseño intencional para máxima simplicidad. ES modules nativos en Chrome/Firefox/Safari. No compatibil con IE.
-
-**¿Cómo funciona el speed ×4?** — `dt = (timestamp - lastTime) * this.speed`. El multiplicador escala el tiempo simulado, no el rAF.
-
-**¿El Pokédex se persiste entre partidas?** — No. `this.pokedex` vive en `ScenePlay` y se reinicia con `reset()`. Solo `bestScore` y `lastSpeed` persisten en localStorage.
-
-**¿Cómo se evita que las torres disparen sobre el camino?** — `PathSystem._computeBlockedCells()` genera un `Set` de strings `"col_row"` que `ScenePlay._isCellOpen()` consulta antes de colocar una torre.
-
-**¿La IA de targeting evalúa línea de visión?** — No. Es range puro. Giovanni (mortar) puede disparar "sobre obstáculos" por diseño.
-
-**¿Qué pasa si PokeAPI CDN está caído?** — `ImageCache` resuelve la Promise con `null` en `onerror`. `Enemy.draw()` detecta `this._img === null` y dibuja el círculo de fallback.

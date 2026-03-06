@@ -1,13 +1,16 @@
-// ─── UI Manager (Team Rocket / Pokémon theme) ──────────────────────────────────
-import { TOWER_DEFS } from '../entities/Tower.js';
+// ─── UI Manager ───────────────────────────────────────────────────────────────
 import { getSpriteUrl } from '../data/pokemon.js';
+import { EVOLUTION_CHAIN } from '../data/balance.js';
 
 export class UI {
     constructor() {
-        this.valMoney = document.getElementById('val-money');
-        this.valLives = document.getElementById('val-lives');
+        this.valLevel = document.getElementById('val-level');
+        this.valXP = document.getElementById('val-xp');
+        this.valPokeballs = document.getElementById('val-pokeballs');
+        this.valCandy = document.getElementById('val-candy');
         this.valWave = document.getElementById('val-wave');
         this.valEnemies = document.getElementById('val-enemies');
+        this.xpBar = document.getElementById('xp-bar');
 
         this.btnStartWave = document.getElementById('btn-start-wave');
         this.btnPause = document.getElementById('btn-pause');
@@ -16,65 +19,86 @@ export class UI {
         this.btnSpeed2 = document.getElementById('btn-speed2');
         this.btnSpeed4 = document.getElementById('btn-speed4');
 
-        this.towerBtns = {
-            dart: document.getElementById('tower-btn-dart'),
-            cannon: document.getElementById('tower-btn-cannon'),
-            ice: document.getElementById('tower-btn-ice'),
-            sniper: document.getElementById('tower-btn-sniper'),
-            laser: document.getElementById('tower-btn-laser'),
-            mortar: document.getElementById('tower-btn-mortar'),
-        };
-
         this.towerInfoPanel = document.getElementById('tower-info');
-        this.towerInfoIcon = document.getElementById('tower-info-icon');
         this.towerInfoName = document.getElementById('tower-info-name');
-        this.towerInfoLevel = document.getElementById('tower-info-level');
-        this.towerStats = document.getElementById('tower-stats');
-        this.upgradeBtns = document.getElementById('upgrade-btns');
-        this.btnSell = document.getElementById('btn-sell');
+        this.towerInfoSprite = document.getElementById('tower-info-sprite');
+        this.towerInfoStats = document.getElementById('tower-stats');
+        this.towerButtons = document.getElementById('tower-buttons');
+
+        this._pokedexGrid = document.getElementById('pokedex-grid');
+        this._pokedexCount = document.getElementById('pokedex-count');
 
         this.menuOverlay = document.getElementById('menu-overlay');
-        this.bestScoreDisplay = document.getElementById('best-score-display');
         this.btnPlay = document.getElementById('btn-play');
         this.pausedBanner = document.getElementById('paused-banner');
         this._msgEl = document.getElementById('msg');
         this._msgTimer = null;
 
-        // Pokédex
-        this._pokedexGrid = document.getElementById('pokedex-grid');
-        this._pokedexCount = document.getElementById('pokedex-count');
+        // ── Handlers (set from ScenePlay) ─────────────────────────────────────
+        this._pickupHandler = null;   // NOTE: never set to null again after init — bug fix
+        this._evolveHandler = null;   // (slotId) → void
+        this._candyHandler = null;   // (slotId) → void
 
-        // Upgrade event delegation
-        this._upgradeHandler = null;
-        this._sellHandler = null;
+        // Sell / Recuperar button
+        const sellBtn = document.getElementById('btn-sell');
+        if (sellBtn) {
+            sellBtn.addEventListener('click', () => {
+                if (this._pickupHandler) this._pickupHandler();
+            });
+        }
 
-        this.upgradeBtns.addEventListener('click', (e) => {
-            const btn = e.target.closest('.upgrade-btn');
-            if (btn && !btn.disabled && this._upgradeHandler) this._upgradeHandler(btn.dataset.key);
-        });
-        this.btnSell.addEventListener('click', () => { if (this._sellHandler) this._sellHandler(); });
+        // Evolucionar button
+        const evoBtn = document.getElementById('btn-evolve');
+        if (evoBtn) {
+            evoBtn.addEventListener('click', () => {
+                if (this._evolveHandler) this._evolveHandler();
+            });
+        }
+
+        // Usar Rare Candy button
+        const candyBtn = document.getElementById('btn-use-candy');
+        if (candyBtn) {
+            candyBtn.addEventListener('click', () => {
+                if (this._candyHandler) this._candyHandler();
+            });
+        }
     }
 
     // ─── HUD ──────────────────────────────────────────────────────────────────
 
-    updateHUD({ money, lives, wave, enemies, totalWaves }) {
-        this.valMoney.textContent = money;
-        this.valLives.textContent = lives;
-        this.valWave.textContent = totalWaves ? `${wave}/${totalWaves}` : wave;
-        this.valEnemies.textContent = enemies;
+    updateHUD({ level, xp, xpToNext, pokeballs, rareCandy, wave, enemies, zone, badges }) {
+        if (this.valLevel) this.valLevel.textContent = level;
+        if (this.valXP) this.valXP.textContent = `${xp}/${xpToNext}`;
+        if (this.valPokeballs) this.valPokeballs.textContent = pokeballs;
+        if (this.valCandy) this.valCandy.textContent = rareCandy;
+        if (this.valWave) this.valWave.textContent = wave;
+        if (this.valEnemies) this.valEnemies.textContent = enemies;
+        if (this.xpBar) {
+            const pct = Math.min(100, Math.round((xp / xpToNext) * 100));
+            this.xpBar.style.width = pct + '%';
+        }
+        const zoneEl = document.getElementById('val-zone');
+        if (zoneEl && zone) zoneEl.textContent = zone;
+        const badgeEl = document.getElementById('val-badges');
+        if (badgeEl && badges !== undefined) badgeEl.textContent = '🏅'.repeat(badges) || '—';
     }
 
-    setStartWaveButton({ waveNum, enabled, running, allDone }) {
+    setStartWaveButton({ waveNum, enabled, running, label = null }) {
         const btn = this.btnStartWave;
-        if (allDone) { btn.textContent = '🏆 ¡Victoria!'; btn.disabled = true; }
-        else if (running) { btn.textContent = `⚔️ Oleada ${waveNum} en curso…`; btn.disabled = true; }
-        else { btn.textContent = `▶ Lanzar Operación ${waveNum}`; btn.disabled = !enabled; }
+        if (!btn) return;
+        if (running) {
+            btn.textContent = label ?? `🌊 Ronda ${waveNum - 1} en curso…`;
+            btn.disabled = true;
+        } else {
+            btn.textContent = label ?? `▶ Lanzar Ronda ${waveNum}`;
+            btn.disabled = !enabled;
+        }
     }
 
     setPaused(paused) {
-        this.btnPause.textContent = paused ? '▶ Reanudar' : '⏸ Pausa';
-        this.btnPause.classList.toggle('active', paused);
-        this.pausedBanner.classList.toggle('show', paused);
+        if (this.btnPause) this.btnPause.textContent = paused ? '▶ Reanudar' : '⏸ Pausa';
+        if (this.btnPause) this.btnPause.classList.toggle('active', paused);
+        if (this.pausedBanner) this.pausedBanner.classList.toggle('show', paused);
     }
 
     setSpeed(speed) {
@@ -84,120 +108,176 @@ export class UI {
         });
     }
 
-    updateTowerSelector(selectedType, money) {
-        for (const [type, btn] of Object.entries(this.towerBtns)) {
-            if (!btn) continue;
-            const cost = TOWER_DEFS[type]?.cost ?? 0;
-            btn.classList.toggle('selected', type === selectedType);
-            btn.classList.toggle('unaffordable', money < cost);
+    // ─── Backpack / Tower Selector ────────────────────────────────────────────
+
+    rebuildBackpackUI(backpack, selectedSlotId, roundRunning) {
+        if (!this.towerButtons) return;
+        this.towerButtons.innerHTML = '';
+
+        if (backpack.length === 0) {
+            this.towerButtons.innerHTML = '<span style="font-size:10px;color:var(--text-dim)">¡Captura Pokémon para usarlos como torres!</span>';
+            return;
+        }
+
+        for (const slot of backpack) {
+            const canEvo = slot.xpToEvolve !== null && (slot.xp ?? 0) >= slot.xpToEvolve;
+            const xpPct = slot.xpToEvolve ? Math.min(100, Math.round(((slot.xp ?? 0) / slot.xpToEvolve) * 100)) : 0;
+
+            const btn = document.createElement('button');
+            btn.className = 'tower-btn';
+            if (slot.id === selectedSlotId) btn.classList.add('selected');
+            if (slot.placed || roundRunning) btn.classList.add('unaffordable');
+            if (canEvo) btn.classList.add('can-evolve');
+
+            const statusIcon = slot.placed ? '📌 ' : '';
+            const evoTag = canEvo ? ' <span style="color:#f0c040;font-size:9px">★EVO!</span>' : '';
+            const xpBarHTML = slot.xpToEvolve
+                ? `<div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:2px">
+                     <div style="height:3px;background:${canEvo ? '#f0c040' : '#a371f7'};width:${xpPct}%;border-radius:2px;transition:width .3s"></div>
+                   </div>`
+                : '';
+
+            btn.innerHTML = `
+              <img src="${getSpriteUrl(slot.pokemonId)}" width="28" height="28" style="image-rendering:pixelated;flex-shrink:0">
+              <div class="tower-info">
+                <div class="tower-name">${statusIcon}${slot.name}${evoTag}</div>
+                <div class="tower-cost" style="color:var(--text-dim);font-size:10px">${slot.pokemonType} · XP ${slot.xp ?? 0}${slot.xpToEvolve ? '/' + slot.xpToEvolve : ''}</div>
+                ${xpBarHTML}
+              </div>
+            `;
+            btn.disabled = slot.placed || roundRunning;
+            btn.addEventListener('click', () => {
+                btn.dispatchEvent(new CustomEvent('backpack-select', {
+                    bubbles: true, detail: { slotId: slot.id }
+                }));
+            });
+            this.towerButtons.appendChild(btn);
         }
     }
 
-    clearTowerSelection() {
-        for (const btn of Object.values(this.towerBtns)) { if (btn) btn.classList.remove('selected'); }
+    bindBackpackSelect(handler) {
+        document.addEventListener('backpack-select', (e) => handler(e.detail.slotId));
     }
 
-    // ─── Tower info panel ─────────────────────────────────────────────────────
+    // ─── Tower Info Panel ─────────────────────────────────────────────────────
 
-    showTowerInfo(tower, money, onUpgrade, onSell) {
-        this._upgradeHandler = onUpgrade;
-        this._sellHandler = onSell;
+    /**
+     * Show tower info with XP bar + evolve button.
+     * @param {PokemonTower} tower
+     * @param {object} slot  - backpack slot (has .xp, .xpToEvolve)
+     * @param {TrainerSystem} trainer
+     */
+    showTowerInfoPokemon(tower, slot, trainer) {
+        if (!this.towerInfoPanel) return;
         this.towerInfoPanel.classList.add('visible');
-        this.towerInfoIcon.textContent = tower.emoji;
-        this.towerInfoIcon.style.background = tower.bgColor;
-        this.towerInfoName.textContent = tower.label;
-        this.towerInfoLevel.textContent = `Nivel ${tower.upgradeLevel + 1}`;
+        if (this.towerInfoName) this.towerInfoName.textContent = tower.pokemonName;
+        if (this.towerInfoSprite) this.towerInfoSprite.src = getSpriteUrl(tower.pokemonId);
 
-        const stats = [
-            { label: '🎯 Daño', value: tower.damage.toFixed(1) },
-            { label: '📡 Alcance', value: tower.range.toFixed(0) },
-            { label: '⚡ Cadencia', value: tower.fireRate.toFixed(2) + '/s' },
-            { label: '💰 Invertido', value: `$${tower.totalCost}` },
-        ];
-        if (tower.areaRadius > 0)
-            stats.push({ label: '💣 Área', value: tower.areaRadius.toFixed(0) + 'px' });
-        if (tower.pierceCount > 1)
-            stats.push({ label: '🔗 Penetra', value: `${tower.pierceCount} Pokémon` });
-        this.towerStats.innerHTML = stats.map(s =>
-            `<div class="stat-item"><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div></div>`
-        ).join('');
+        const slotXP = slot?.xp ?? 0;
+        const xpToEvo = slot?.xpToEvolve ?? null;
+        const canEvo = xpToEvo !== null && slotXP >= xpToEvo;
+        const xpPct = xpToEvo ? Math.min(100, Math.round((slotXP / xpToEvo) * 100)) : 0;
+        const nextEvoName = xpToEvo ? (EVOLUTION_CHAIN[tower.pokemonId]?.evolvedName ?? '—') : '—';
 
-        const available = tower.getAvailableUpgrades();
-        if (available.length === 0) {
-            this.upgradeBtns.innerHTML = '<div style="font-size:11px;color:var(--text-dim)">Agente al máximo nivel ✨</div>';
-        } else {
-            this.upgradeBtns.innerHTML = available.map(upg => {
-                const canAfford = money >= upg.cost;
-                const preview = tower.previewUpgrade(upg);
-                const diffs = Object.entries(preview).map(([stat, newVal]) => {
-                    const labels = {
-                        damage: 'Daño', range: 'Alcance', fireRate: 'Cadencia',
-                        areaRadius: 'Área', pierceCount: 'Penetra',
-                        slowAmount: 'Slow', slowDuration: 'Dur.Slow'
-                    };
-                    const lbl = labels[stat] || stat;
-                    const cur = tower[stat] ?? 0;
-                    const fmt = v => stat === 'fireRate' ? v.toFixed(2) + '/s'
-                        : stat === 'slowAmount' ? (v * 100).toFixed(0) + '%'
-                            : stat === 'slowDuration' ? (v / 1000).toFixed(1) + 's'
-                                : typeof v === 'number' ? v.toFixed(stat === 'range' || stat === 'areaRadius' ? 0 : 1)
-                                    : v;
-                    return `<span style="color:var(--text-dim)">${lbl}: </span><span style="color:#aaa">${fmt(cur)}</span><span style="color:#3fb950"> → ${fmt(newVal)}</span>`;
-                }).join('<br>');
-                return `
-          <button class="upgrade-btn" data-key="${upg.key}" ${canAfford ? '' : 'disabled'}>
-            <div class="upgrade-btn-label">[${upg.key}] ${upg.label}</div>
-            <div class="upgrade-btn-desc" style="font-size:10px;margin-top:3px;line-height:1.7">${diffs}</div>
-            <div class="upgrade-btn-cost ${canAfford ? '' : 'cant-afford'}">$${upg.cost}</div>
-          </button>`;
-            }).join('');
+        if (this.towerInfoStats) {
+            const xpBarHTML = xpToEvo
+                ? `<div style="grid-column:span 2;background:rgba(255,255,255,0.06);border-radius:6px;padding:5px 7px">
+                     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-bottom:3px">
+                       <span>📈 XP Torre</span><span>${slotXP}/${xpToEvo} (→${nextEvoName})</span>
+                     </div>
+                     <div style="height:5px;background:rgba(255,255,255,0.1);border-radius:3px">
+                       <div style="height:5px;background:${canEvo ? '#f0c040' : '#a371f7'};width:${xpPct}%;border-radius:3px;transition:width .4s"></div>
+                     </div>
+                   </div>`
+                : '';
+            this.towerInfoStats.innerHTML = `
+              <div class="stat-item"><div class="stat-label">🎯 Daño</div><div class="stat-value">${tower.damage.toFixed(0)}</div></div>
+              <div class="stat-item"><div class="stat-label">📡 Alcance</div><div class="stat-value">${tower.range.toFixed(0)}</div></div>
+              <div class="stat-item"><div class="stat-label">⚡ Cadencia</div><div class="stat-value">${tower.fireRate.toFixed(1)}/s</div></div>
+              <div class="stat-item"><div class="stat-label">🔤 Tipo</div><div class="stat-value">${tower.pokemonType}</div></div>
+              ${xpBarHTML}
+            `;
         }
-    }
 
-    refreshUpgradeAffordability(money, tower) {
-        if (!tower) return;
-        const available = tower.getAvailableUpgrades();
-        this.upgradeBtns.querySelectorAll('.upgrade-btn[data-key]').forEach(btn => {
-            const upg = available.find(u => u.key === btn.dataset.key);
-            if (upg) btn.disabled = money < upg.cost;
-        });
-        this.btnSell.textContent = `💸 Liberar ($${tower.getSellValue()})`;
+        // Evolucionar button
+        const evoBtn = document.getElementById('btn-evolve');
+        if (evoBtn) {
+            if (xpToEvo !== null) {
+                evoBtn.style.display = '';
+                evoBtn.disabled = !canEvo;
+                evoBtn.textContent = canEvo
+                    ? `⭐ Evolucionar → ${nextEvoName}`
+                    : `⭐ Evolucionar (${slotXP}/${xpToEvo} XP)`;
+            } else {
+                evoBtn.style.display = 'none';
+            }
+        }
+
+        // Usar Rare Candy button
+        const candyBtn = document.getElementById('btn-use-candy');
+        if (candyBtn) {
+            const hasCandy = trainer && trainer.rareCandy > 0;
+            const canUse = xpToEvo !== null && hasCandy;
+            if (xpToEvo !== null) {
+                candyBtn.style.display = '';
+                candyBtn.disabled = !canUse;
+                candyBtn.textContent = `🍬 Rare Candy (${trainer?.rareCandy ?? 0})`;
+            } else {
+                candyBtn.style.display = 'none';
+            }
+        }
+
+        const sellBtn = document.getElementById('btn-sell');
+        if (sellBtn) sellBtn.textContent = '📦 Recuperar';
     }
 
     hideTowerInfo() {
-        this.towerInfoPanel.classList.remove('visible');
-        this._upgradeHandler = null; this._sellHandler = null;
+        if (this.towerInfoPanel) this.towerInfoPanel.classList.remove('visible');
+        // NOTE: do NOT null _pickupHandler/_evolveHandler/_candyHandler here.
+        // They are persistent closures set once in ScenePlay._bindUI().
     }
+
+    bindPickupHandler(handler) { this._pickupHandler = handler; }
+    bindEvolveHandler(handler) { this._evolveHandler = handler; }
+    bindCandyHandler(handler) { this._candyHandler = handler; }
 
     // ─── Pokédex ──────────────────────────────────────────────────────────────
 
     updatePokedex(pokedexMap) {
         if (!this._pokedexGrid) return;
         const count = pokedexMap.size;
-        if (this._pokedexCount) this._pokedexCount.textContent = `${count} capturado${count !== 1 ? 's' : ''}`;
+        if (this._pokedexCount) this._pokedexCount.textContent = `${count}/151`;
         this._pokedexGrid.innerHTML = '';
+        if (count === 0) {
+            this._pokedexGrid.innerHTML = '<span style="font-size:10px;color:var(--text-dim);font-style:italic">¡Captura para llenar tu Pokédex!</span>';
+            return;
+        }
         for (const [id, entry] of pokedexMap) {
             const img = document.createElement('img');
             img.src = getSpriteUrl(id);
             img.title = `${entry.name} ×${entry.count}`;
             img.alt = entry.name;
-            img.style.cssText = `width:32px;height:32px;image-rendering:pixelated;filter:drop-shadow(0 0 3px ${entry.color})`;
+            img.style.cssText = 'width:28px;height:28px;image-rendering:pixelated';
             this._pokedexGrid.appendChild(img);
         }
     }
 
     // ─── Menu ─────────────────────────────────────────────────────────────────
 
-    showMenu(bestScore) {
-        this.menuOverlay.classList.remove('hidden');
-        this.bestScoreDisplay.textContent = bestScore > 0 ? `🏆 Mejor Oleada: ${bestScore}` : '';
+    showMenu() {
+        if (this.menuOverlay) this.menuOverlay.classList.remove('hidden');
+        document.querySelectorAll('.starter-btn').forEach(b => b.classList.remove('selected'));
+        if (this.btnPlay) this.btnPlay.disabled = true;
     }
 
-    hideMenu() { this.menuOverlay.classList.add('hidden'); }
+    hideMenu() {
+        if (this.menuOverlay) this.menuOverlay.classList.add('hidden');
+    }
 
     // ─── Toast ────────────────────────────────────────────────────────────────
 
     showMessage(text, durationMs = 2200) {
+        if (!this._msgEl) return;
         this._msgEl.textContent = text;
         this._msgEl.classList.add('show');
         clearTimeout(this._msgTimer);

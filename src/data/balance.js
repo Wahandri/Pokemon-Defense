@@ -2,166 +2,37 @@
 // SINGLE SOURCE OF TRUTH. Edit only this file to tune gameplay.
 //
 // HP(wave)     = round(HP_base × HP_SCALE^(wave-1))
-// reward(wave) = max(reward_base, round(HP_wave × REWARD_FACTOR))
 // ────────────────────────────────────────────────────────────────────────────────
 
-export const HP_SCALE = 1.18;
-export const REWARD_FACTOR = 0.28;
-export const REWARD_MIN = 2;
+export const HP_SCALE = 1.15;  // was 1.18 — gentler per-round HP growth
 
-export const WAVE_BONUS_BASE = 15;
-export const WAVE_BONUS_PER_WAVE = 6;
-
-export const START_MONEY = 200;
-export const START_LIVES = 20;
-
-// ── Enemy definitions (5 tiers of Pokémon) ───────────────────────────────────
-// radius is bigger (sprite-size) so collision with Pokémon PNG feels natural
+// ── Enemy definitions (4 tiers of Pokémon, all Gen 1) ────────────────────────
+// No reward_base — economy is now XP-based, not money-based
 export const ENEMY_CONFIG = {
     red: {
-        label: 'Tier 1 ★', HP_base: 10, reward_base: 3, speed: 92, damage: 1,
+        label: 'Tier 1 ★', HP_base: 8, speed: 75, damage: 1,
         color: '#e84040', accent: '#ff7070', radius: 18,
     },
     blue: {
-        label: 'Tier 2 ★★', HP_base: 28, reward_base: 7, speed: 65, damage: 1,
+        label: 'Tier 2 ★★', HP_base: 22, speed: 58, damage: 1,
         color: '#3a8fff', accent: '#80c0ff', radius: 20,
     },
     green: {
-        label: 'Tier 3 ★★★', HP_base: 60, reward_base: 14, speed: 112, damage: 2,
+        label: 'Tier 3 ★★★', HP_base: 55, speed: 95, damage: 2,
         color: '#2dbd55', accent: '#70e890', radius: 20,
     },
     t4: {
-        label: 'Tier 4 ★★★★', HP_base: 200, reward_base: 50, speed: 55, damage: 3,
+        label: 'Tier 4 ★★★★', HP_base: 180, speed: 48, damage: 3,
         color: '#c792ea', accent: '#e8c8ff', radius: 22,
     },
-    boss: {
-        label: 'LEGENDARIO ★★★★★', HP_base: 1500, reward_base: 400, speed: 45, damage: 5,
-        color: '#f47c3c', accent: '#ffb080', radius: 28,
-    },
 };
 
-// ── Tower / Trainer definitions (Team Rocket) ─────────────────────────────────
-export const TOWER_CONFIG = {
-
-    // ─── Grunt ♀ – lanza pokéball rápida ─────────────────────────────────────
-    dart: {
-        label: 'Grunt ♀', emoji: '🚀', cost: 100,
-        color: '#cc0000', glowColor: '#ff3333', bgColor: '#1a0000',
-        range: 130, fireRate: 1.2, damage: 10, projSpeed: 380,
-        upgrades: [
-            [
-                { key: 'A', label: 'Pokéball Afilada', cost: 80, mods: { damage: { mul: 1.6 } } },
-                { key: 'B', label: 'Lanzamiento Largo', cost: 70, mods: { range: { mul: 1.35 } } },
-            ],
-            [
-                { key: 'A', label: 'Pokéball Élite', cost: 130, mods: { damage: { mul: 1.8 }, fireRate: { mul: 1.2 } } },
-                { key: 'B', label: 'Ráfaga de Rockets', cost: 115, mods: { range: { mul: 1.5 }, fireRate: { mul: 1.3 } } },
-            ],
-        ],
-    },
-
-    // ─── Grunt ♂ – pokéball pesada, daño de área ──────────────────────────────
-    cannon: {
-        label: 'Grunt ♂', emoji: '💣', cost: 175,
-        color: '#e3b341', glowColor: '#e3b341', bgColor: '#2a1f00',
-        range: 120, fireRate: 0.35, damage: 55, projSpeed: 200,
-        areaRadius: 60,
-        upgrades: [
-            [
-                { key: 'A', label: 'Megaball Pesada', cost: 120, mods: { damage: { mul: 1.7 } } },
-                { key: 'B', label: 'Cañón TR Largo', cost: 110, mods: { range: { mul: 1.3 }, areaRadius: { mul: 1.3 } } },
-            ],
-            [
-                { key: 'A', label: 'Bomba Cluster TR', cost: 200, mods: { damage: { mul: 2.0 }, areaRadius: { mul: 1.4 } } },
-                { key: 'B', label: 'Obús del Equipo R', cost: 185, mods: { range: { mul: 1.4 }, fireRate: { mul: 1.5 } } },
-            ],
-        ],
-    },
-
-    // ─── Jessie – frisa pokémon con pokéball de hielo ─────────────────────────
-    ice: {
-        label: 'Jessie', emoji: '💜', cost: 120,
-        color: '#a5d8ff', glowColor: '#a5d8ff', bgColor: '#1a1040',
-        range: 110, fireRate: 0.65, damage: 5, projSpeed: 280,
-        slowAmount: 0.38, slowDuration: 2200,
-        upgrades: [
-            [
-                { key: 'A', label: 'Bola Ártica Jessie', cost: 85, mods: { slowAmount: { add: -0.12, min: 0.12 } } },
-                { key: 'B', label: 'Largo Alcance Rosa', cost: 90, mods: { range: { mul: 1.4 } } },
-            ],
-            [
-                { key: 'A', label: 'Tormenta de Jessie', cost: 145, mods: { slowAmount: { add: -0.10, min: 0.05 }, slowDuration: { mul: 1.6 } } },
-                { key: 'B', label: 'Estilo Blizzard', cost: 155, mods: { range: { mul: 1.6 }, fireRate: { mul: 1.4 } } },
-            ],
-        ],
-    },
-
-    // ─── James – disparo élite de largo alcance ────────────────────────────────
-    sniper: {
-        label: 'James', emoji: '🌹', cost: 250,
-        color: '#6ab0ff', glowColor: '#6ab0ff', bgColor: '#001030',
-        range: 320, fireRate: 0.45, damage: 80, projSpeed: 700,
-        upgrades: [
-            [
-                { key: 'A', label: 'Pokéball Perforadora', cost: 175, mods: { damage: { mul: 1.7 } } },
-                { key: 'B', label: 'Mira de James', cost: 160, mods: { range: { mul: 1.4 }, fireRate: { mul: 1.2 } } },
-            ],
-            [
-                { key: 'A', label: 'Ultraball Dorada', cost: 280, mods: { damage: { mul: 2.2 } } },
-                { key: 'B', label: 'Fusil del Equipo R', cost: 260, mods: { range: { mul: 1.5 }, fireRate: { mul: 1.5 }, projSpeed: { mul: 1.5 } } },
-            ],
-        ],
-    },
-
-    // ─── Meowth – arañazos rápidos, penetran enemigos ─────────────────────────
-    laser: {
-        label: 'Meowth', emoji: '🪙', cost: 300,
-        color: '#f0c050', glowColor: '#ffd700', bgColor: '#1a1500',
-        range: 180, fireRate: 4.0, damage: 8, projSpeed: 900,
-        pierceCount: 3,
-        upgrades: [
-            [
-                { key: 'A', label: 'Uñas Pay Day', cost: 200, mods: { damage: { mul: 1.6 }, pierceCount: { add: 2 } } },
-                { key: 'B', label: 'Sprint de Meowth', cost: 190, mods: { range: { mul: 1.35 }, fireRate: { mul: 1.3 } } },
-            ],
-            [
-                { key: 'A', label: 'Pay Day Devastador', cost: 320, mods: { damage: { mul: 2.0 }, pierceCount: { add: 3 } } },
-                { key: 'B', label: 'Velocidad Crítica', cost: 300, mods: { range: { mul: 1.5 }, fireRate: { mul: 1.5 } } },
-            ],
-        ],
-    },
-
-    // ─── Giovanni – artillería suprema del Team Rocket ────────────────────────
-    mortar: {
-        label: 'Giovanni', emoji: '😼', cost: 400,
-        color: '#444', glowColor: '#888', bgColor: '#0a0a0a',
-        range: 350, fireRate: 0.22, damage: 140, projSpeed: 160,
-        areaRadius: 90,
-        upgrades: [
-            [
-                { key: 'A', label: 'Bomba de Giovanni', cost: 280, mods: { damage: { mul: 1.8 }, areaRadius: { mul: 1.3 } } },
-                { key: 'B', label: 'Red del Jefe TR', cost: 250, mods: { range: { mul: 1.4 }, fireRate: { mul: 1.4 } } },
-            ],
-            [
-                { key: 'A', label: 'Megabomba del Jefe', cost: 450, mods: { damage: { mul: 2.5 }, areaRadius: { mul: 1.5 } } },
-                { key: 'B', label: 'Batería Suprema TR', cost: 400, mods: { fireRate: { mul: 2.0 }, range: { mul: 1.3 } } },
-            ],
-        ],
-    },
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helper ────────────────────────────────────────────────────────────────────
 
 export function calcHP(type, wave) {
     const def = ENEMY_CONFIG[type];
     if (!def) throw new Error(`Unknown enemy type: ${type}`);
     return Math.max(1, Math.round(def.HP_base * Math.pow(HP_SCALE, wave - 1)));
-}
-
-export function calcReward(type, wave) {
-    const def = ENEMY_CONFIG[type];
-    const hp = calcHP(type, wave);
-    return Math.max(def.reward_base, Math.round(hp * REWARD_FACTOR));
 }
 
 export function applyMod(value, mod) {
@@ -173,6 +44,131 @@ export function applyMod(value, mod) {
     return v;
 }
 
-export function calcWaveBonus(wave) {
-    return WAVE_BONUS_BASE + wave * WAVE_BONUS_PER_WAVE;
+// ── XP awarded per capture ────────────────────────────────────────────────────
+export const XP_PER_TIER = {
+    red: 12,
+    blue: 25,
+    green: 50,
+    t4: 100,
+};
+
+// ── XP required to level up ───────────────────────────────────────────────────
+export function xpToNextLevel(level) {
+    return 80 + level * 40;
+}
+
+// ── Evolution chains (starters + common Gen 1 wild Pokémon) ─────────────────
+// xpRequired: XP this tower's slot needs to reach before allowing manual evolve
+// damageBonus: multiplier applied to tower.damage on evolution (stack-safe ×mult)
+// rangeBonus / fireRateBonus: similar
+export const EVOLUTION_CHAIN = {
+    // ── Starters ──────────────────────────────────────────────────────────────
+    1: { evolvesTo: 2, evolvedName: 'Ivysaur', pokemonType: 'grass', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    2: { evolvesTo: 3, evolvedName: 'Venusaur', pokemonType: 'grass', xpRequired: 130, damageBonus: 1.5, rangeBonus: 1.2, fireRateBonus: 1.1 },
+    4: { evolvesTo: 5, evolvedName: 'Charmeleon', pokemonType: 'fire', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.15 },
+    5: { evolvesTo: 6, evolvedName: 'Charizard', pokemonType: 'fire', xpRequired: 130, damageBonus: 1.6, rangeBonus: 1.2, fireRateBonus: 1.2 },
+    7: { evolvesTo: 8, evolvedName: 'Wartortle', pokemonType: 'water', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    8: { evolvesTo: 9, evolvedName: 'Blastoise', pokemonType: 'water', xpRequired: 130, damageBonus: 1.5, rangeBonus: 1.25, fireRateBonus: 1.1 },
+    // ── Bug types ─────────────────────────────────────────────────────────────
+    10: { evolvesTo: 11, evolvedName: 'Metapod', pokemonType: 'bug', xpRequired: 30, damageBonus: 1.1, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    11: { evolvesTo: 12, evolvedName: 'Butterfree', pokemonType: 'bug', xpRequired: 70, damageBonus: 1.4, rangeBonus: 1.2, fireRateBonus: 1.15 },
+    13: { evolvesTo: 14, evolvedName: 'Kakuna', pokemonType: 'bug', xpRequired: 30, damageBonus: 1.1, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    14: { evolvesTo: 15, evolvedName: 'Beedrill', pokemonType: 'bug', xpRequired: 70, damageBonus: 1.4, rangeBonus: 1.1, fireRateBonus: 1.3 },
+    // ── Normal/Flying ─────────────────────────────────────────────────────────
+    16: { evolvesTo: 17, evolvedName: 'Pidgeotto', pokemonType: 'normal', xpRequired: 50, damageBonus: 1.25, rangeBonus: 1.15, fireRateBonus: 1.1 },
+    17: { evolvesTo: 18, evolvedName: 'Pidgeot', pokemonType: 'normal', xpRequired: 110, damageBonus: 1.5, rangeBonus: 1.3, fireRateBonus: 1.2 },
+    19: { evolvesTo: 20, evolvedName: 'Raticate', pokemonType: 'normal', xpRequired: 45, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.25 },
+    21: { evolvesTo: 22, evolvedName: 'Fearow', pokemonType: 'normal', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.2, fireRateBonus: 1.1 },
+    // ── Poison ────────────────────────────────────────────────────────────────
+    23: { evolvesTo: 24, evolvedName: 'Arbok', pokemonType: 'poison', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    // ── Electric ──────────────────────────────────────────────────────────────
+    25: { evolvesTo: 26, evolvedName: 'Raichu', pokemonType: 'electric', xpRequired: 50, damageBonus: 1.4, rangeBonus: 1.1, fireRateBonus: 1.2 },
+    // ── Ground ────────────────────────────────────────────────────────────────
+    27: { evolvesTo: 28, evolvedName: 'Sandslash', pokemonType: 'ground', xpRequired: 50, damageBonus: 1.35, rangeBonus: 1.0, fireRateBonus: 1.1 },
+    // ── Normal/Fairy ──────────────────────────────────────────────────────────
+    35: { evolvesTo: 36, evolvedName: 'Clefable', pokemonType: 'normal', xpRequired: 60, damageBonus: 1.4, rangeBonus: 1.15, fireRateBonus: 1.0 },
+    // ── Fire ──────────────────────────────────────────────────────────────────
+    37: { evolvesTo: 38, evolvedName: 'Ninetales', pokemonType: 'fire', xpRequired: 65, damageBonus: 1.4, rangeBonus: 1.2, fireRateBonus: 1.1 },
+    // ── Jigglypuff ────────────────────────────────────────────────────────────
+    39: { evolvesTo: 40, evolvedName: 'Wigglytuff', pokemonType: 'normal', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    // ── Fighting ──────────────────────────────────────────────────────────────
+    66: { evolvesTo: 67, evolvedName: 'Machoke', pokemonType: 'fighting', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.0, fireRateBonus: 1.1 },
+    67: { evolvesTo: 68, evolvedName: 'Machamp', pokemonType: 'fighting', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.1, fireRateBonus: 1.2 },
+    // ── Ghost ─────────────────────────────────────────────────────────────────
+    92: { evolvesTo: 93, evolvedName: 'Haunter', pokemonType: 'ghost', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.2, fireRateBonus: 1.1 },
+    93: { evolvesTo: 94, evolvedName: 'Gengar', pokemonType: 'ghost', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.25, fireRateBonus: 1.25 },
+    // ── Rock/Ground ───────────────────────────────────────────────────────────
+    74: { evolvesTo: 75, evolvedName: 'Graveler', pokemonType: 'rock', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    75: { evolvesTo: 76, evolvedName: 'Golem', pokemonType: 'rock', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    // ── Water ─────────────────────────────────────────────────────────────────
+    60: { evolvesTo: 61, evolvedName: 'Poliwhirl', pokemonType: 'water', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.1 },
+    79: { evolvesTo: 80, evolvedName: 'Slowbro', pokemonType: 'water', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.2, fireRateBonus: 1.0 },
+    116: { evolvesTo: 117, evolvedName: 'Seadra', pokemonType: 'water', xpRequired: 50, damageBonus: 1.35, rangeBonus: 1.15, fireRateBonus: 1.1 },
+    129: { evolvesTo: 130, evolvedName: 'Gyarados', pokemonType: 'water', xpRequired: 100, damageBonus: 1.8, rangeBonus: 1.3, fireRateBonus: 1.15 },
+    // ── Eevee ─────────────────────────────────────────────────────────────────
+    133: { evolvesTo: 136, evolvedName: 'Flareon', pokemonType: 'fire', xpRequired: 70, damageBonus: 1.5, rangeBonus: 1.0, fireRateBonus: 1.2 },
+};
+
+// ── Starter Tower configs (Pokémon as towers) ─────────────────────────────────
+// pokemonType: used for type effectiveness
+export const STARTER_TOWER_CONFIG = {
+    bulbasaur: {
+        label: 'Bulbasaur',
+        pokemonId: 1,
+        pokemonType: 'grass',
+        emoji: '🌿',
+        color: '#78c850',
+        glowColor: '#a8e890',
+        bgColor: '#1a3010',
+        range: 120,
+        fireRate: 0.8,
+        damage: 12,
+        projSpeed: 300,
+    },
+    charmander: {
+        label: 'Charmander',
+        pokemonId: 4,
+        pokemonType: 'fire',
+        emoji: '🔥',
+        color: '#f08030',
+        glowColor: '#f8a050',
+        bgColor: '#301a00',
+        range: 110,
+        fireRate: 1.1,
+        damage: 14,
+        projSpeed: 360,
+    },
+    squirtle: {
+        label: 'Squirtle',
+        pokemonId: 7,
+        pokemonType: 'water',
+        emoji: '💧',
+        color: '#6890f0',
+        glowColor: '#98b8f8',
+        bgColor: '#0a102a',
+        range: 130,
+        fireRate: 0.7,
+        damage: 11,
+        projSpeed: 280,
+        slowAmount: 0.55,
+        slowDuration: 1800,
+    },
+};
+
+// ── Type effectiveness chart ───────────────────────────────────────────────────
+// FIRE > GRASS > WATER > FIRE
+export const TYPE_CHART = {
+    fire: { grass: 1.5, water: 0.65, fire: 1.0, normal: 1.0, psychic: 1.0, poison: 1.0, rock: 0.65, electric: 1.0 },
+    grass: { water: 1.5, fire: 0.65, grass: 1.0, normal: 1.0, psychic: 1.0, poison: 0.65, rock: 1.0, electric: 1.0 },
+    water: { fire: 1.5, grass: 0.65, water: 1.0, normal: 1.0, psychic: 1.0, poison: 1.0, rock: 1.5, electric: 0.65 },
+    normal: {},
+    psychic: {},
+    poison: {},
+    rock: { fire: 1.5, water: 0.65 },
+    electric: { water: 1.5, grass: 0.65 },
+};
+
+export function typeMultiplier(attackerType, defenderType) {
+    if (!attackerType || !defenderType) return 1.0;
+    return TYPE_CHART[attackerType]?.[defenderType] ?? 1.0;
 }
