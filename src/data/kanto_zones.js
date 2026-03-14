@@ -463,7 +463,7 @@ export function isZoneUnlocked(zone, trainer) {
         case 'badge':
             return trainer.hasBadge?.(rule.badgeId) ?? false;
         case 'level':
-            return (trainer.level ?? 1) >= (rule.level ?? 1);
+            return (trainer.totalCaptures ?? 0) >= (rule.level ?? 1);
         default:
             return false;
     }

@@ -2,7 +2,7 @@
 // Trainer progression: level/XP, pokéballs, rareCandy, badges,
 // party (max 6, can be placed as towers), pcBox (unlimited storage), Pokédex.
 
-import { xpToNextLevel, EVOLUTION_CHAIN } from '../data/balance.js';
+import { EVOLUTION_CHAIN, xpToReachPokemonLevel } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 
 export class TrainerSystem {
@@ -11,9 +11,6 @@ export class TrainerSystem {
     }
 
     reset() {
-        this.level = 1;
-        this.xp = 0;
-        this.xpToNext = xpToNextLevel(1);
         this.pokeballs = 3;
         this.rareCandy = 0;
 
@@ -49,7 +46,9 @@ export class TrainerSystem {
             pokemonType: starterConfig.pokemonType,
             starterKey,
             placed: false,
+            level: 5,
             xp: 0,
+            xpToNextLevel: xpToReachPokemonLevel(6) - xpToReachPokemonLevel(5),
             xpToEvolve: evo?.xpRequired ?? null,
         };
         this.party.push(slot);
@@ -73,7 +72,9 @@ export class TrainerSystem {
             pokemonType: enemy.pokemonType,
             starterKey: null,
             placed: false,
+            level: enemy.wildLevel ?? 3,
             xp: 0,
+            xpToNextLevel: xpToReachPokemonLevel((enemy.wildLevel ?? 3) + 1) - xpToReachPokemonLevel(enemy.wildLevel ?? 3),
             xpToEvolve: evo?.xpRequired ?? null,
         };
 
@@ -152,32 +153,32 @@ export class TrainerSystem {
         }
     }
 
-    // ─── Trainer XP / Level ───────────────────────────────────────────────────
-
-    /** @returns {Array<{type: 'levelup'|'candy', level?: number}>} */
-    addXP(amount) {
-        this.xp += amount;
-        const events = [];
-        while (this.xp >= this.xpToNext) {
-            this.xp -= this.xpToNext;
-            this.level++;
-            this.xpToNext = xpToNextLevel(this.level);
-            if (this.level % 3 === 0) {
-                this.rareCandy++;
-                events.push({ type: 'candy' });
-            }
-            events.push({ type: 'levelup', level: this.level });
-        }
-        return events;
-    }
-
     // ─── Slot XP (tower Pokémon) ──────────────────────────────────────────────
 
     addXPToSlot(slotId, amount) {
         const slot = this._findSlot(slotId);
         if (!slot) return { evolved: false };
+
+        slot.level = slot.level ?? 1;
         slot.xp = (slot.xp ?? 0) + amount;
-        return { evolved: false };
+
+        let leveledUp = false;
+        while (slot.level < 100) {
+            const xpNeed = xpToReachPokemonLevel(slot.level + 1) - xpToReachPokemonLevel(slot.level);
+            if (slot.xp < xpNeed) {
+                slot.xpToNextLevel = xpNeed;
+                break;
+            }
+            slot.xp -= xpNeed;
+            slot.level++;
+            leveledUp = true;
+        }
+        if (slot.level >= 100) {
+            slot.level = 100;
+            slot.xp = 0;
+            slot.xpToNextLevel = 0;
+        }
+        return { leveledUp, level: slot.level };
     }
 
     canEvolve(slotId) {
@@ -243,6 +244,10 @@ export class TrainerSystem {
     markPlaced(slotId) { const s = this._findSlot(slotId); if (s) s.placed = true; }
     markReturned(slotId) { const s = this._findSlot(slotId); if (s) s.placed = false; }
     getAvailableSlots() { return this.party.filter(s => !s.placed); }
+
+    returnAllToBackpack() {
+        for (const slot of this.party) slot.placed = false;
+    }
 
     getSlot(slotId) { return this._findSlot(slotId) ?? null; }
     _findSlot(slotId) {

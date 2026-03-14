@@ -117,6 +117,7 @@ export class Game {
 
     goToZoneSelect() {
         document.getElementById('pc-overlay')?.remove();
+        this.trainer.returnAllToBackpack();
         this.paused = false;
         this.ui.setPaused(false);
         this._showZoneOverlay();
@@ -229,7 +230,7 @@ export class Game {
         // Subtitle
         const subtitleEl = overlay.querySelector('#zone-modal-subtitle');
         if (subtitleEl) {
-            subtitleEl.textContent = `Nivel ${t.level} | ${t.totalCaptures} capturas | ${t.badgeCount} medallas`;
+            subtitleEl.textContent = `${t.totalCaptures} capturas | ${t.badgeCount} medallas`;
         }
 
         // Zone list
@@ -252,6 +253,8 @@ export class Game {
                     lockReason = `Captura ${rule.count - t.totalCaptures} Pokémon más`;
                 } else if (rule.type === 'badge') {
                     lockReason = `Necesitas la Medalla ${rule.badgeId}`;
+                } else if (rule.type === 'level') {
+                    lockReason = `Captura ${Math.max(0, (rule.level ?? 1) - t.totalCaptures)} Pokémon más`;
                 }
             }
 

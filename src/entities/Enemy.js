@@ -2,12 +2,12 @@
 // Enemies are wild Pokémon. HP → 0 makes them WEAKENED (capturable), not dead.
 // They die only when: captured by pokéball OR they reach the end (escape).
 
-import { ENEMY_CONFIG, calcHP } from '../data/balance.js';
+import { ENEMY_CONFIG, calcHP, getWildLevelForRound, getPokemonLevelMultiplier } from '../data/balance.js';
 import { pickPokemon, getPokemonType, getSpriteUrl, TIER_INFO } from '../data/pokemon.js';
 import { ImageCache } from '../utils/ImageCache.js';
 
 export class Enemy {
-    constructor(type, pathSystem, waveNum = 1, forcePokemon = null) {
+    constructor(type, pathSystem, waveNum = 1, forcePokemon = null, wildLevel = getWildLevelForRound(waveNum)) {
         const def = ENEMY_CONFIG[type];
         if (!def) throw new Error(`Unknown enemy type: ${type}`);
 
@@ -22,10 +22,13 @@ export class Enemy {
         this.tierInfo = TIER_INFO[type] ?? TIER_INFO.red;
 
         // Stats from balance.js
-        this.maxHp = calcHP(type, waveNum);
+        this.wildLevel = wildLevel;
+        this.maxHp = calcHP(type, waveNum, wildLevel);
         this.hp = this.maxHp;
+        const levelMult = getPokemonLevelMultiplier(wildLevel);
         this.baseSpeed = def.speed;
         this.speed = def.speed;
+        this.attack = (def.damage ?? 1) * levelMult;
         this.color = def.color;
         this.accent = def.accent;
         this.radius = def.radius;
@@ -280,6 +283,6 @@ export class Enemy {
     }
 }
 
-export function createEnemy(type, pathSystem, waveNum = 1, forcePokemon = null) {
-    return new Enemy(type, pathSystem, waveNum, forcePokemon);
+export function createEnemy(type, pathSystem, waveNum = 1, forcePokemon = null, wildLevel = getWildLevelForRound(waveNum)) {
+    return new Enemy(type, pathSystem, waveNum, forcePokemon, wildLevel);
 }
