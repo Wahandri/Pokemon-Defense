@@ -37,6 +37,8 @@ export class UI {
         this.pausedBanner = document.getElementById('paused-banner');
         this._msgEl = document.getElementById('msg');
         this._msgTimer = null;
+        this._roundClearEl = document.getElementById('round-clear');
+        this._roundClearTimer = null;
 
         // ── Handlers (set from ScenePlay) ─────────────────────────────────────
         this._pickupHandler = null;   // NOTE: never set to null again after init — bug fix
@@ -315,6 +317,24 @@ export class UI {
 
     hideMenu() {
         if (this.menuOverlay) this.menuOverlay.classList.add('hidden');
+    }
+
+
+
+    showRoundClear({ captured = 0, escaped = 0, xpGained = 0, pokeballsGained = 0 }) {
+        if (!this._roundClearEl) return;
+        this._roundClearEl.innerHTML = `
+          <div style="font-weight:800;font-size:15px;margin-bottom:6px">Round cleared!</div>
+          <div style="font-size:11px;line-height:1.45">
+            Captured: <b>${captured}</b><br>
+            Escaped: <b>${escaped}</b><br>
+            XP gained: <b>${xpGained}</b><br>
+            Pokeballs gained: <b>${pokeballsGained}</b>
+          </div>
+        `;
+        this._roundClearEl.classList.add('show');
+        clearTimeout(this._roundClearTimer);
+        this._roundClearTimer = setTimeout(() => this._roundClearEl.classList.remove('show'), 2400);
     }
 
     // ─── Toast ────────────────────────────────────────────────────────────────

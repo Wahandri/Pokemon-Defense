@@ -4,12 +4,27 @@
 
 import { getWildLevelForRound } from '../data/balance.js';
 
-const TIER_UNLOCK = {
-    red: 1,
-    blue: 3,
-    green: 6,
-    t4: 10,
-};
+
+/** Generate spawn groups for a given round number */
+function pickTierForRound(roundNum) {
+    if (roundNum <= 2) return 'red';
+
+    const roll = Math.random();
+    if (roundNum >= 10) {
+        if (roll < 0.18) return 't4';
+        if (roll < 0.45) return 'green';
+        if (roll < 0.7) return 'blue';
+        return 'red';
+    }
+    if (roundNum >= 6) {
+        if (roll < 0.2) return 'green';
+        if (roll < 0.6) return 'blue';
+        return 'red';
+    }
+    // Round 3-5 => Tier2 at 20%, else Tier1
+    if (roll < 0.2) return 'blue';
+    return 'red';
+}
 
 /** Generate spawn groups for a given round number */
 function generateWave(roundNum) {
@@ -22,21 +37,18 @@ function generateWave(roundNum) {
     const maxGroups = Math.min(5, 2 + Math.floor(roundNum / 3));
     const groupCount = minGroups + Math.floor(Math.random() * (maxGroups - minGroups + 1));
 
-    let remaining = Math.min(16, 2 + Math.floor(roundNum * 1.2));
-
-    const available = Object.entries(TIER_UNLOCK)
-        .filter(([, minRound]) => roundNum >= minRound)
-        .map(([type]) => type);
+    let remaining = Math.min(18, 2 + Math.floor(roundNum * 1.25));
 
     for (let i = 0; i < groupCount; i++) {
         const groupsLeft = groupCount - i;
+        const reserve = Math.max(0, groupsLeft - 1);
+        const maxForGroup = Math.max(1, Math.min(5, remaining - reserve));
         const count = groupsLeft === 1
             ? remaining
-            : Math.max(0, Math.floor(Math.random() * Math.min(4, remaining - (groupsLeft - 1))) + 1);
+            : Math.max(1, Math.floor(Math.random() * maxForGroup) + 1);
         remaining -= count;
-        if (count <= 0) continue;
 
-        const type = available[Math.floor(Math.random() * available.length)];
+        const type = pickTierForRound(roundNum);
         const delayBase = Math.max(220, 920 - roundNum * 28);
         const delay = Math.max(180, delayBase + Math.floor(Math.random() * 320) - 140);
 

@@ -493,6 +493,29 @@
       transform: translateX(-50%) translateY(0);
     }
 
+
+    #round-clear {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      background: rgba(10, 20, 10, 0.94);
+      border: 1px solid #2a5a2a;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 180px;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity .2s, transform .2s;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #round-clear.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     /* Canvas area */
     #canvas-wrap {
       flex: 1;
@@ -1187,7 +1210,7 @@
 
       <div id="kb-hints">
         Clic: seleccionar/colocar · Clic derecho: recuperar<br>
-        Arrastra 🔴 sobre Pokémon debilitado · Esc: cancelar<br>
+        Arrastra 🔴 o clic en debilitado para capturar · Esc: cancelar<br>
         P: pausa · D: debug
       </div>
     </div>
@@ -1195,6 +1218,7 @@
   </div>
 
   <div id="msg"></div>
+  <div id="round-clear"></div>
 
   <script type="module" src="src/main.js"></script>
 </body>

@@ -21,6 +21,37 @@ export class Particle {
     }
 }
 
+
+export class FloatingText {
+    constructor(x, y, text, color = '#ffffff', life = 900) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.life = life;
+        this.maxLife = life;
+        this.dead = false;
+    }
+    update(dt) {
+        this.y -= 24 * (dt / 1000);
+        this.life -= dt;
+        if (this.life <= 0) this.dead = true;
+    }
+    draw(ctx) {
+        const a = Math.max(0, this.life / this.maxLife);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.fillStyle = this.color;
+        ctx.strokeText(this.text, this.x, this.y);
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+    }
+}
+
 /** Standard death/hit effect */
 export function spawnDeathParticles(x, y, color, count = 8) {
     const parts = [];
