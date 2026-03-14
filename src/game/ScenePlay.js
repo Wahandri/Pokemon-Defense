@@ -53,7 +53,7 @@ export class ScenePlay {
         this._roundSpawned = 0;
         this._roundWeakened = 0;
         this.waveSystem = new WaveSystem(
-            (type, waveNum, forcePokemon) => this._spawnEnemy(type, waveNum, forcePokemon),
+            (type, waveNum, forcePokemon, wildLevel) => this._spawnEnemy(type, waveNum, forcePokemon, wildLevel),
             (waveNum, escaped) => this._onWaveClear(waveNum, escaped)
         );
 
@@ -227,7 +227,7 @@ export class ScenePlay {
         this._updateHUD();
     }
 
-    _spawnEnemy(type, waveNum = 1, forcePokemon = null) {
+    _spawnEnemy(type, waveNum = 1, forcePokemon = null, wildLevel = null) {
         // Zone mode: pick encounter from zone's encounter pool
         if (this.zoneConfig?.encounters?.length) {
             const pool = this.zoneConfig.encounters;
@@ -235,7 +235,7 @@ export class ScenePlay {
             type = enc.tier;  // use encounter's tier for HP scaling
             forcePokemon = { id: enc.speciesId, name: enc.name };
         }
-        const enemy = createEnemy(type, this.pathSystem, waveNum, forcePokemon);
+        const enemy = createEnemy(type, this.pathSystem, waveNum, forcePokemon, wildLevel ?? undefined);
         if (this.zoneConfig?.encounters?.length) {
             // Re-assign pokemonType from encounter data so type effectiveness works
             const pool = this.zoneConfig.encounters;
@@ -250,21 +250,35 @@ export class ScenePlay {
     }
 
     _onWaveClear(waveNum, _escaped) {
-        const allWeakened = this._roundSpawned > 0 &&
-            this._roundWeakened >= this._roundSpawned;
-        if (allWeakened) {
-            this.trainer.addPokeball(1);
-            this.ui.showMessage('🎉 ¡Ronda perfecta! +1 Pokébola + RC 🔴', 3500);
-            // Perfect round always spawns a Rare Candy
-            this.rareCandyItems.push(new RareCandyItem());
-        } else {
-            this.ui.showMessage(`✅ Ronda ${waveNum} completada`, 2200);
+        const allWeakened = this._roundSpawned > 0 && this._roundWeakened >= this._roundSpawned;
+        if (!allWeakened) {
+            this.ui.showMessage(`🔁 Ronda ${waveNum} se repite: derrota a todos`, 2500);
+            this._roundSpawned = 0;
+            this._roundWeakened = 0;
+            this.waveSystem.restartCurrentWave();
+            this._updateHUD();
+            return;
         }
-        // Rare Candy drops once every 5 rounds
+
+        this.trainer.addPokeball(1);
+        this.ui.showMessage('🎉 ¡Ronda perfecta! +1 Pokébola + RC 🔴', 3500);
+        this.rareCandyItems.push(new RareCandyItem());
+
         if (waveNum > 0 && waveNum % 5 === 0) {
             this.rareCandyItems.push(new RareCandyItem());
             this.ui.showMessage('🍬 ¡Caramelo Raro disponible en el mapa!', 2500);
         }
+
+        if (waveNum >= 10) {
+            this.trainer.returnAllToBackpack();
+            this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
+            this.ui.showMessage('🏁 Superaste la ronda 10. Volviendo al menú...', 2600);
+            this._updateHUD();
+            this.onExit?.();
+            return;
+        }
+
+        this.ui.showMessage(`✅ Ronda ${waveNum} completada`, 2200);
         this._updateHUD();
         this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
     }
@@ -379,27 +393,19 @@ export class ScenePlay {
         this.trainer.registerPokedex(enemy.pokemonId, enemy.pokemonName);
         this.trainer.addCaptured(enemy, this.zoneConfig?.id ?? null);
 
-        // XP split: 70% trainer / 30% tower-slot
         const totalXP = XP_PER_TIER[enemy.type] ?? 12;
-        const slotXP = Math.ceil(totalXP * 0.30);
-        const trainerXP = totalXP - slotXP;
 
         if (enemy.lastAttacker?.slotId) {
-            this.trainer.addXPToSlot(enemy.lastAttacker.slotId, slotXP);
+            const lvResult = this.trainer.addXPToSlot(enemy.lastAttacker.slotId, totalXP);
             // Refresh info panel if this tower is selected
             if (this.selectedTower?.slotId === enemy.lastAttacker.slotId) {
                 const slot = this.trainer.getSlot(enemy.lastAttacker.slotId);
                 this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
             }
+            if (lvResult.leveledUp) this.ui.showMessage(`⭐ ${enemy.lastAttacker.pokemonName} subió a Nv. ${lvResult.level}`, 2200);
         }
 
-        const events = this.trainer.addXP(trainerXP);
-        for (const ev of events) {
-            if (ev.type === 'levelup') this.ui.showMessage(`⭐ ¡Nivel ${ev.level}!`, 2500);
-            if (ev.type === 'candy') this.ui.showMessage('🍬 +1 Rare Candy al subir nivel!', 2000);
-        }
-
-        this.ui.showMessage(`✅ ¡${enemy.pokemonName} capturado! +${totalXP} XP`, 1800);
+        this.ui.showMessage(`✅ ¡${enemy.pokemonName} capturado! +${totalXP} XP torre`, 1800);
         this.ui.updatePokedex(this.trainer.pokedex);
         this.ui.rebuildBackpackUI(this.trainer.backpack, this.selectedSlotId, this.waveSystem.isRunning);
         this._updateHUD();
@@ -532,9 +538,6 @@ export class ScenePlay {
         const ws = this.waveSystem;
         const t = this.trainer;
         this.ui.updateHUD({
-            level: t.level,
-            xp: t.xp,
-            xpToNext: t.xpToNext,
             pokeballs: t.pokeballs,
             rareCandy: t.rareCandy,
             wave: ws.waveNumber,
@@ -746,6 +749,7 @@ export class ScenePlay {
         this.particles = [];
         this.occupiedCells.clear();
         this.waveSystem.reset();
+        this.trainer.returnAllToBackpack();
         this.selectedSlotId = null;
         this.selectedTower = null;
         this._deselectTower();

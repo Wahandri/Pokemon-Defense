@@ -11,6 +11,9 @@ export class UI {
         this.valWave = document.getElementById('val-wave');
         this.valEnemies = document.getElementById('val-enemies');
         this.xpBar = document.getElementById('xp-bar');
+        document.getElementById('hud-level')?.remove();
+        document.getElementById('hud-xp')?.remove();
+        document.getElementById('xp-bar-wrap')?.remove();
 
         this.btnStartWave = document.getElementById('btn-start-wave');
         this.btnPause = document.getElementById('btn-pause');
@@ -110,17 +113,11 @@ export class UI {
 
     // ─── HUD ──────────────────────────────────────────────────────────────────
 
-    updateHUD({ level, xp, xpToNext, pokeballs, rareCandy, wave, enemies, zone, badges }) {
-        if (this.valLevel) this.valLevel.textContent = level;
-        if (this.valXP) this.valXP.textContent = `${xp}/${xpToNext}`;
+    updateHUD({ pokeballs, rareCandy, wave, enemies, zone, badges }) {
         if (this.valPokeballs) this.valPokeballs.textContent = pokeballs;
         if (this.valCandy) this.valCandy.textContent = rareCandy;
         if (this.valWave) this.valWave.textContent = wave;
         if (this.valEnemies) this.valEnemies.textContent = enemies;
-        if (this.xpBar) {
-            const pct = Math.min(100, Math.round((xp / xpToNext) * 100));
-            this.xpBar.style.width = pct + '%';
-        }
         const zoneEl = document.getElementById('val-zone');
         if (zoneEl && zone) zoneEl.textContent = zone;
         const badgeEl = document.getElementById('val-badges');
@@ -227,7 +224,7 @@ export class UI {
             const xpBarHTML = xpToEvo
                 ? `<div style="grid-column:span 2;background:rgba(255,255,255,0.06);border-radius:6px;padding:5px 7px">
                      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-bottom:3px">
-                       <span>📈 XP Torre</span><span>${slotXP}/${xpToEvo} (→${nextEvoName})</span>
+                       <span>📈 XP Torre (Nv ${slot?.level ?? 1})</span><span>${slotXP}/${xpToEvo} (→${nextEvoName})</span>
                      </div>
                      <div style="height:5px;background:rgba(255,255,255,0.1);border-radius:3px">
                        <div style="height:5px;background:${canEvo ? '#f0c040' : '#a371f7'};width:${xpPct}%;border-radius:3px;transition:width .4s"></div>
@@ -239,6 +236,7 @@ export class UI {
               <div class="stat-item"><div class="stat-label">📡 Alcance</div><div class="stat-value">${tower.range.toFixed(0)}</div></div>
               <div class="stat-item"><div class="stat-label">⚡ Cadencia</div><div class="stat-value">${tower.fireRate.toFixed(1)}/s</div></div>
               <div class="stat-item"><div class="stat-label">🔤 Tipo</div><div class="stat-value">${tower.pokemonType}</div></div>
+              <div class="stat-item"><div class="stat-label">⭐ Nivel</div><div class="stat-value">${slot?.level ?? 1}</div></div>
               ${xpBarHTML}
             `;
         }

@@ -3,7 +3,7 @@
 // Visual: sprite displayed on a styled platform.
 // Attacks: fires standard Pokéballs at enemies, applying type effectiveness.
 
-import { STARTER_TOWER_CONFIG } from '../data/balance.js';
+import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 import { getTowerConfig } from '../data/pokemon_tower_config.js';
 import { ImageCache } from '../utils/ImageCache.js';
@@ -21,12 +21,13 @@ export class PokemonTower {
      * @param {number} row           - grid row
      * @param {number} cellSize      - grid cell size in px
      */
-    constructor(slotId, starterKey, pokemonId, pokemonName, pokemonType, col, row, cellSize) {
+    constructor(slotId, starterKey, pokemonId, pokemonName, pokemonType, col, row, cellSize, level = 1) {
         this.slotId = slotId;
         this.pokemonId = pokemonId;
         this.pokemonName = pokemonName;
         this.pokemonType = pokemonType;
         this.starterKey = starterKey;
+        this.level = level;
 
         // Position
         this.col = col;
@@ -46,7 +47,7 @@ export class PokemonTower {
         };
         this.range = cfg.range;
         this.fireRate = cfg.fireRate;
-        this.damage = cfg.damage;
+        this.damage = cfg.damage * getPokemonLevelMultiplier(level);
         this.projSpeed = cfg.projSpeed;
         this.slowAmount = cfg.slowAmount ?? null;
         this.slowDuration = cfg.slowDuration ?? null;
@@ -139,8 +140,8 @@ export class PokemonTower {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Range ring (when selected or debug)
-        if (this.selected || debug) {
+        // Range ring (only while selected)
+        if (this.selected) {
             ctx.beginPath(); ctx.arc(0, 0, this.range, 0, Math.PI * 2);
             ctx.strokeStyle = `rgba(255,255,255,0.22)`;
             ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
@@ -205,6 +206,6 @@ export class PokemonTower {
 export function createPokemonTower(slot, col, row, cellSize) {
     return new PokemonTower(
         slot.id, slot.starterKey, slot.pokemonId,
-        slot.name, slot.pokemonType, col, row, cellSize
+        slot.name, slot.pokemonType, col, row, cellSize, slot.level ?? 1
     );
 }

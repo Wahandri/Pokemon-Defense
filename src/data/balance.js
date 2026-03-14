@@ -4,7 +4,11 @@
 // HP(wave)     = round(HP_base × HP_SCALE^(wave-1))
 // ────────────────────────────────────────────────────────────────────────────────
 
-export const HP_SCALE = 1.15;  // was 1.18 — gentler per-round HP growth
+export const HP_SCALE = 1.10;
+export const ATK_LEVEL_SCALE = 1.09;
+
+// Wild level progression inspired by Pokémon Red early-game pacing.
+const ROUND_LEVEL_TABLE = [3, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
 // ── Enemy definitions (4 tiers of Pokémon, all Gen 1) ────────────────────────
 // No reward_base — economy is now XP-based, not money-based
@@ -29,10 +33,26 @@ export const ENEMY_CONFIG = {
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
-export function calcHP(type, wave) {
+export function getWildLevelForRound(roundNum) {
+    if (roundNum <= ROUND_LEVEL_TABLE.length) return ROUND_LEVEL_TABLE[roundNum - 1];
+    return ROUND_LEVEL_TABLE[ROUND_LEVEL_TABLE.length - 1] + (roundNum - ROUND_LEVEL_TABLE.length) * 2;
+}
+
+export function getPokemonLevelMultiplier(level = 1) {
+    return Math.pow(ATK_LEVEL_SCALE, Math.max(0, level - 1));
+}
+
+export function xpToReachPokemonLevel(level) {
+    const lv = Math.max(1, Math.min(100, Math.floor(level)));
+    return Math.pow(lv, 3);
+}
+
+export function calcHP(type, wave, wildLevel = getWildLevelForRound(wave)) {
     const def = ENEMY_CONFIG[type];
     if (!def) throw new Error(`Unknown enemy type: ${type}`);
-    return Math.max(1, Math.round(def.HP_base * Math.pow(HP_SCALE, wave - 1)));
+    const waveScale = Math.pow(HP_SCALE, wave - 1);
+    const levelScale = Math.pow(1.08, Math.max(0, wildLevel - 1));
+    return Math.max(1, Math.round(def.HP_base * waveScale * levelScale));
 }
 
 export function applyMod(value, mod) {
@@ -52,10 +72,6 @@ export const XP_PER_TIER = {
     t4: 100,
 };
 
-// ── XP required to level up ───────────────────────────────────────────────────
-export function xpToNextLevel(level) {
-    return 80 + level * 40;
-}
 
 // ── Evolution chains (starters + common Gen 1 wild Pokémon) ─────────────────
 // xpRequired: XP this tower's slot needs to reach before allowing manual evolve
