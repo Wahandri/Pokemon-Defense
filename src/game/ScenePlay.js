@@ -9,7 +9,7 @@ import { WaveSystem } from '../systems/WaveSystem.js';
 import { Collision } from '../systems/Collision.js';
 import { createEnemy } from '../entities/Enemy.js';
 import { createPokemonTower } from '../entities/PokemonTower.js';
-import { spawnDeathParticles, spawnCaptureEffect, Particle } from '../entities/Particle.js';
+import { spawnDeathParticles, spawnCaptureEffect, Particle, FloatingText } from '../entities/Particle.js';
 import { RareCandyItem } from '../entities/RareCandyItem.js';
 import { MAP1 } from '../data/maps.js';
 import { XP_PER_TIER, EVOLUTION_CHAIN, STARTER_TOWER_CONFIG } from '../data/balance.js';
@@ -52,6 +52,10 @@ export class ScenePlay {
         // ── Wave system ───────────────────────────────────────────────────────
         this._roundSpawned = 0;
         this._roundWeakened = 0;
+        this._roundCaptured = 0;
+        this._roundEscaped = 0;
+        this._roundXpGained = 0;
+        this._roundPokeballsGained = 0;
         this.waveSystem = new WaveSystem(
             (type, waveNum, forcePokemon, wildLevel) => this._spawnEnemy(type, waveNum, forcePokemon, wildLevel),
             (waveNum, escaped) => this._onWaveClear(waveNum, escaped)
@@ -217,6 +221,10 @@ export class ScenePlay {
         // Reset per-round trackers
         this._roundSpawned = 0;
         this._roundWeakened = 0;
+        this._roundCaptured = 0;
+        this._roundEscaped = 0;
+        this._roundXpGained = 0;
+        this._roundPokeballsGained = 0;
         this.waveSystem.startNextWave();
         this.ui.showMessage(`🌊 ¡Ronda ${this.waveSystem.waveNumber} comenzando!`);
         // Cancel pending placement + deselect tower (can't touch during wave)
@@ -261,6 +269,7 @@ export class ScenePlay {
         }
 
         this.trainer.addPokeball(1);
+        this._roundPokeballsGained += 1;
         this.ui.showMessage('🎉 ¡Ronda perfecta! +1 Pokébola + RC 🔴', 3500);
         this.rareCandyItems.push(new RareCandyItem());
 
@@ -279,6 +288,12 @@ export class ScenePlay {
         }
 
         this.ui.showMessage(`✅ Ronda ${waveNum} completada`, 2200);
+        this.ui.showRoundClear({
+            captured: this._roundCaptured,
+            escaped: this._roundEscaped,
+            xpGained: this._roundXpGained,
+            pokeballsGained: this._roundPokeballsGained,
+        });
         this._updateHUD();
         this.ui.rebuildBackpackUI(this.trainer.backpack, null, false);
     }
@@ -370,19 +385,28 @@ export class ScenePlay {
             this.ui.showMessage('❌ No hay Pokémon en pantalla');
             return;
         }
-        if (!this.trainer.usePokebal()) {
-            this.ui.showMessage('❌ No tienes Pokébolas');
-            return;
-        }
 
         // Find weakened enemy near click
         const target = Collision.findWeakened(this.enemies, x, y, 45);
-        if (target) {
-            this._captureEnemy(target);
-        } else {
-            this.ui.showMessage('💨 ¡La Pokébola falló!', 1500);
+        if (!target) {
+            if (this.trainer.usePokebal()) {
+                this.ui.showMessage('💨 ¡La Pokébola falló!', 1500);
+            } else {
+                this.ui.showMessage('❌ No tienes Pokébolas');
+            }
+            this._updateHUD();
+            return;
         }
+
+        const captured = this._tryCaptureEnemy(target);
+        if (!captured) this.ui.showMessage('❌ No tienes Pokébolas');
         this._updateHUD();
+    }
+
+    _tryCaptureEnemy(enemy) {
+        if (!this.trainer.usePokebal()) return false;
+        this._captureEnemy(enemy);
+        return true;
     }
 
     _captureEnemy(enemy) {
@@ -391,9 +415,12 @@ export class ScenePlay {
 
         // Pokédex + backpack
         this.trainer.registerPokedex(enemy.pokemonId, enemy.pokemonName);
-        this.trainer.addCaptured(enemy, this.zoneConfig?.id ?? null);
+        const captureResult = this.trainer.addCaptured(enemy, this.zoneConfig?.id ?? null);
 
         const totalXP = XP_PER_TIER[enemy.type] ?? 12;
+        this.trainer.addXP(totalXP);
+        this._roundCaptured++;
+        this._roundXpGained += totalXP;
 
         if (enemy.lastAttacker?.slotId) {
             const lvResult = this.trainer.addXPToSlot(enemy.lastAttacker.slotId, totalXP);
@@ -402,9 +429,13 @@ export class ScenePlay {
                 const slot = this.trainer.getSlot(enemy.lastAttacker.slotId);
                 this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
             }
-            if (lvResult.leveledUp) this.ui.showMessage(`⭐ ${enemy.lastAttacker.pokemonName} subió a Nv. ${lvResult.level}`, 2200);
+            if (lvResult.leveledUp) {
+                enemy.lastAttacker.triggerLevelUpFx?.();
+                this.ui.showMessage(`⭐ ${enemy.lastAttacker.pokemonName} subió a Nv. ${lvResult.level}`, 2200);
+            }
         }
 
+        if (captureResult.sentToPC) this.ui.showMessage('📦 Pokemon sent to PC', 1800);
         this.ui.showMessage(`✅ ¡${enemy.pokemonName} capturado! +${totalXP} XP torre`, 1800);
         this.ui.updatePokedex(this.trainer.pokedex);
         this.ui.rebuildBackpackUI(this.trainer.backpack, this.selectedSlotId, this.waveSystem.isRunning);
@@ -481,6 +512,16 @@ export class ScenePlay {
                     const slot = this.trainer.getSlot(this.selectedTower.slotId);
                     this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
                 }
+                return;
+            }
+        }
+
+        if (this.waveSystem.isRunning) {
+            const weakenedTarget = Collision.findWeakened(this.enemies, x, y, 28);
+            if (weakenedTarget) {
+                const captured = this._tryCaptureEnemy(weakenedTarget);
+                if (!captured) this.ui.showMessage('❌ No tienes Pokébolas');
+                this._updateHUD();
                 return;
             }
         }
@@ -573,7 +614,12 @@ export class ScenePlay {
             if (enemy.reached && !enemy._rewarded) {
                 enemy._rewarded = true;
                 this.waveSystem.recordEscape();
-                this.ui.showMessage(`💨 ${enemy.pokemonName} escapó…`, 1100);
+                this._roundEscaped++;
+                const penalty = this.trainer.onEnemyEscape(enemy);
+                if (penalty.penalty === 'xp') this.ui.showMessage(`💨 ${enemy.pokemonName} escapó… -${penalty.amount} XP`, 1400);
+                else if (penalty.penalty === 'pokeball') this.ui.showMessage(`💨 ${enemy.pokemonName} escapó… -1 Pokébola`, 1400);
+                else this.ui.showMessage(`💨 ${enemy.pokemonName} escapó…`, 1100);
+                this._updateHUD();
             }
         }
 
@@ -589,7 +635,11 @@ export class ScenePlay {
         }
 
         // Collision (also applies type mult)
-        Collision.check(this.projectiles, this.enemies);
+        Collision.check(this.projectiles, this.enemies, (enemy, mult) => {
+            const text = mult > 1 ? 'SUPER EFFECTIVE!' : 'NOT VERY EFFECTIVE';
+            const color = mult > 1 ? '#ff7b72' : '#a5d8ff';
+            this.particles.push(new FloatingText(enemy.x, enemy.y - enemy.radius - 12, text, color));
+        });
 
         // Particles
         for (const p of this.particles) p.update(dt);

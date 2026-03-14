@@ -13,6 +13,7 @@ export class TrainerSystem {
     reset() {
         this.pokeballs = 3;
         this.rareCandy = 0;
+        this.trainerXP = 0;
 
         /** party: max 6, these can be placed as towers on the map */
         this.party = [];
@@ -94,7 +95,28 @@ export class TrainerSystem {
             this.capturesPerZone.set(zoneId, (this.capturesPerZone.get(zoneId) ?? 0) + 1);
         }
 
-        return { addedToParty };
+        return { addedToParty, sentToPC: !addedToParty };
+    }
+
+    addXP(amount = 0) {
+        this.trainerXP = Math.max(0, this.trainerXP + Math.max(0, amount));
+        return this.trainerXP;
+    }
+
+    onEnemyEscape(enemy) {
+        if (!enemy?.weakened) return { applied: false, reason: 'notWeakened' };
+
+        if (this.trainerXP >= 10) {
+            this.trainerXP -= 10;
+            return { applied: true, penalty: 'xp', amount: 10 };
+        }
+
+        if (this.pokeballs > 0) {
+            this.pokeballs -= 1;
+            return { applied: true, penalty: 'pokeball', amount: 1 };
+        }
+
+        return { applied: false, reason: 'noResources' };
     }
 
     // ─── Party ↔ PC Box management ────────────────────────────────────────────

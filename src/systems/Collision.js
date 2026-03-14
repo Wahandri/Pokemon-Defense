@@ -9,7 +9,7 @@ export class Collision {
      * @param {Projectile[]} projectiles
      * @param {Enemy[]}      enemies
      */
-    static check(projectiles, enemies) {
+    static check(projectiles, enemies, onTypeEffect = null) {
         for (const proj of projectiles) {
             if (proj.dead) continue;
             for (const enemy of enemies) {
@@ -22,6 +22,7 @@ export class Collision {
                     const mult = typeMultiplier(proj.attackerType, enemy.pokemonType);
                     if (mult !== 1.0) {
                         proj._typeEffMult = mult;
+                        onTypeEffect?.(enemy, mult);
                     }
                     proj.onHit(enemy, enemies); // passes all enemies for AoE
                     break;

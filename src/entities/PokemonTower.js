@@ -68,6 +68,7 @@ export class PokemonTower {
         this.selected = false;
         this.dead = false;
         this._xp = 0;  // XP accumulated (cosmetic for now)
+        this._levelUpFx = 0;
 
         // Sprite
         this._img = null;
@@ -99,6 +100,7 @@ export class PokemonTower {
 
         this._fireCooldown -= dt;
         if (this._shootAnim > 0) this._shootAnim -= dt;
+        if (this._levelUpFx > 0) this._levelUpFx -= dt;
 
         if (this._fireCooldown <= 0) {
             const target = this._findTarget(enemies);
@@ -171,6 +173,29 @@ export class PokemonTower {
             ctx.shadowBlur = 0;
         }
 
+
+        if (this._levelUpFx > 0) {
+            const t = this._levelUpFx / 900;
+            const pulse = 1 + (1 - t) * 0.35;
+            ctx.beginPath();
+            ctx.arc(0, 0, (r + 8) * pulse, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(240,192,64,${0.8 * t})`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            const textY = -r - 12 - (1 - t) * 10;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, t);
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+            ctx.fillStyle = '#ffd700';
+            ctx.strokeText('+LEVEL UP', 0, textY);
+            ctx.fillText('+LEVEL UP', 0, textY);
+            ctx.restore();
+        }
+
         // Pokémon sprite inside — same size ratio as wild enemies (r*3.5)
         if (this._img) {
             ctx.imageSmoothingEnabled = false;
@@ -187,6 +212,10 @@ export class PokemonTower {
     }
 
     addXP(amount) { this._xp += amount; }
+
+    triggerLevelUpFx() {
+        this._levelUpFx = 900;
+    }
 
     isSpecialReady(now = Date.now()) {
         return now >= this._specialReadyAt;
