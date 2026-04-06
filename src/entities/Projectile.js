@@ -43,8 +43,8 @@ export class Projectile {
 // ─── Dart → Standard Pokéball ─────────────────────────────────────────────────
 
 export class DartProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, attackerType }) {
-        super({ x, y, damage, speed, attackerType });
+    constructor({ x, y, target, damage, speed, attackerType, attacker }) {
+        super({ x, y, damage, speed, attackerType, attacker });
         this.target = target; this.radius = 6;
         this._rot = Math.random() * Math.PI * 2;
     }
@@ -67,8 +67,8 @@ export class DartProjectile extends Projectile {
 // ─── Cannon → Heavy Pokéball (arcing AoE) ─────────────────────────────────────
 
 export class CannonProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, areaRadius, attackerType }) {
-        super({ x, y, damage, speed, attackerType }); this.isAoe = true; this.areaRadius = areaRadius;
+    constructor({ x, y, target, damage, speed, areaRadius, attackerType, attacker }) {
+        super({ x, y, damage, speed, attackerType, attacker }); this.isAoe = true; this.areaRadius = areaRadius;
         this.target = target; this.radius = 9;
         this._startX = x; this._startY = y; this._progress = 0;
         this._totalDist = dist(x, y, target.x, target.y); this._arcH = 45;
@@ -76,7 +76,7 @@ export class CannonProjectile extends Projectile {
     }
     onHit(enemy, all) {
         for (const e of all) {
-            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this._effectiveDamage(), this);
+            if (!e.dead && dist(this.x, this.y, e.x, e.y) <= this.areaRadius) e.takeDamage(this._effectiveDamage(), this.tower ?? this);
         }
         this.dead = true;
     }
@@ -106,12 +106,12 @@ export class CannonProjectile extends Projectile {
 // ─── Ice → Dive Ball (slow) ───────────────────────────────────────────────────
 
 export class IceProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, slowAmount, slowDuration, attackerType }) {
-        super({ x, y, damage, speed, attackerType }); this.target = target;
+    constructor({ x, y, target, damage, speed, slowAmount, slowDuration, attackerType, attacker }) {
+        super({ x, y, damage, speed, attackerType, attacker }); this.target = target;
         this.slowAmount = slowAmount; this.slowDuration = slowDuration;
         this.radius = 6; this._rot = 0;
     }
-    onHit(enemy, _all) { enemy.takeDamage(this._effectiveDamage(), this); enemy.applySlow(this.slowAmount, this.slowDuration); this.dead = true; }
+    onHit(enemy, _all) { enemy.takeDamage(this._effectiveDamage(), this.tower ?? this); enemy.applySlow(this.slowAmount, this.slowDuration); this.dead = true; }
     update(dt) {
         if (this.target.dead && !this.target.reached) { this.dead = true; return; }
         const dx = this.target.x - this.x, dy = this.target.y - this.y;
@@ -162,8 +162,8 @@ export class SniperProjectile extends Projectile {
 // ─── Laser → Quick Ball (pierce) ──────────────────────────────────────────────
 
 export class LaserProjectile extends Projectile {
-    constructor({ x, y, target, damage, speed, pierceCount, attackerType }) {
-        super({ x, y, damage, speed, attackerType }); this.target = target;
+    constructor({ x, y, target, damage, speed, pierceCount, attackerType, attacker }) {
+        super({ x, y, damage, speed, attackerType, attacker }); this.target = target;
         this.pierceCount = pierceCount; this.radius = 5;
         const dx = target.x - x, dy = target.y - y, d = Math.sqrt(dx * dx + dy * dy) || 1;
         this.vx = (dx / d) * speed; this.vy = (dy / d) * speed;
@@ -172,7 +172,7 @@ export class LaserProjectile extends Projectile {
     onHit(enemy, _all) {
         if (this._hitEnemies.has(enemy)) return;
         this._hitEnemies.add(enemy);
-        enemy.takeDamage(this._effectiveDamage(), this);
+        enemy.takeDamage(this._effectiveDamage(), this.tower ?? this);
         this._pierced++;
         if (this._pierced >= this.pierceCount) this.dead = true;
     }
@@ -193,6 +193,37 @@ export class LaserProjectile extends Projectile {
         ctx.translate(this.x, this.y); ctx.rotate(this._rot);
         ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 14;
         pokeball(ctx, 0, 0, this.radius, '#ffd700', '#222222'); // Quick Ball yellow/dark
+        ctx.restore();
+    }
+}
+
+// ─── Dot → Net Ball (applies burn/poison DoT on hit) ─────────────────────────
+
+export class DotProjectile extends Projectile {
+    constructor({ x, y, target, damage, speed, attackerType, attacker, dotDmg, dotDur }) {
+        super({ x, y, damage, speed, attackerType, attacker });
+        this.target = target; this.radius = 6;
+        this.dotDmg = dotDmg ?? 2; this.dotDur = dotDur ?? 2000;
+        this._rot = Math.random() * Math.PI * 2;
+    }
+    onHit(enemy, _all) {
+        enemy.takeDamage(this._effectiveDamage(), this.tower ?? this);
+        enemy.statuses = enemy.statuses ?? {};
+        enemy.statuses['burn'] = { end: Date.now() + this.dotDur, dps: this.dotDmg, _lastTick: 0 };
+        this.dead = true;
+    }
+    update(dt) {
+        if (this.target.dead && !this.target.reached) { this.dead = true; return; }
+        const dx = this.target.x - this.x, dy = this.target.y - this.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1, s = this.speed * (dt / 1000);
+        this._rot += dt * 0.018;
+        if (d <= s) { this.x = this.target.x; this.y = this.target.y; return; }
+        this.x += (dx / d) * s; this.y += (dy / d) * s;
+    }
+    draw(ctx) {
+        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this._rot);
+        ctx.shadowColor = '#88ff44'; ctx.shadowBlur = 8;
+        pokeball(ctx, 0, 0, this.radius, '#226622', '#88ff44'); // Net Ball green
         ctx.restore();
     }
 }

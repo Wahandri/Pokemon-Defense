@@ -4,7 +4,7 @@
 // Click to move Pokémon between party and box.
 
 import { getSpriteUrl } from '../data/pokemon.js';
-import { EVOLUTION_CHAIN } from '../data/balance.js';
+import { EVOLUTION_CHAIN, TOWER_XP_TO_NEXT } from '../data/balance.js';
 
 export class ScenePC {
     /**
@@ -73,7 +73,9 @@ export class ScenePC {
             el.className = 'pc-party-slot' + (slot ? '' : ' pc-empty-slot');
             if (slot) {
                 const evo = EVOLUTION_CHAIN[slot.pokemonId];
-                const xpPct = evo ? Math.min(100, Math.round(((slot.xp ?? 0) / evo.xpRequired) * 100)) : 0;
+                const lv = slot.level ?? 1;
+                const xpNeeded = lv < 10 ? (TOWER_XP_TO_NEXT[lv - 1] ?? 0) : 0;
+                const xpPct = xpNeeded > 0 ? Math.min(100, Math.round(((slot.xp ?? 0) / xpNeeded) * 100)) : 100;
                 el.innerHTML = `
                   <img src="${getSpriteUrl(slot.pokemonId)}" alt="${slot.name}" width="40" height="40" style="image-rendering:pixelated">
                   <div class="pc-slot-info">

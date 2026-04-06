@@ -367,7 +367,7 @@ export class SceneGymPlay {
         ctx.fillStyle = '#f0c040';
         ctx.font = 'bold 14px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`⚔️ Gimnasio Roca — ${this.gym.leader}`, CANVAS_W / 2, 20);
+        ctx.fillText(`⚔️ ${this.gym.name} — ${this.gym.leader}`, CANVAS_W / 2, 20);
         ctx.restore();
     }
 

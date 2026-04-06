@@ -1,14 +1,15 @@
 // ─── PokémonTower Entity ───────────────────────────────────────────────────────
 // Towers are now Pokémon from the player's backpack.
 // Visual: sprite displayed on a styled platform.
-// Attacks: fires standard Pokéballs at enemies, applying type effectiveness.
+// Attacks: type-based attack catalog with unlockable modes.
 
-import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier } from '../data/balance.js';
+import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier, TOWER_LEVEL_BONUS } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 import { getTowerConfig } from '../data/pokemon_tower_config.js';
+import { getAttacksForType, getUnlockedAttacks } from '../data/pokemon_attacks.js';
 import { ImageCache } from '../utils/ImageCache.js';
 import { dist } from '../utils/math.js';
-import { DartProjectile, IceProjectile } from './Projectile.js';
+import { DartProjectile, IceProjectile, DotProjectile, LaserProjectile, CannonProjectile } from './Projectile.js';
 
 export class PokemonTower {
     /**
@@ -20,8 +21,10 @@ export class PokemonTower {
      * @param {number} col           - grid column
      * @param {number} row           - grid row
      * @param {number} cellSize      - grid cell size in px
+     * @param {number} level         - current tower level (1-10)
+     * @param {number} currentAttackIdx - which attack is active
      */
-    constructor(slotId, starterKey, pokemonId, pokemonName, pokemonType, col, row, cellSize, level = 1) {
+    constructor(slotId, starterKey, pokemonId, pokemonName, pokemonType, col, row, cellSize, level = 1, currentAttackIdx = 0) {
         this.slotId = slotId;
         this.pokemonId = pokemonId;
         this.pokemonName = pokemonName;
@@ -49,14 +52,17 @@ export class PokemonTower {
         this.fireRate = cfg.fireRate;
         this.damage = cfg.damage * getPokemonLevelMultiplier(level);
         this.projSpeed = cfg.projSpeed;
-        this.slowAmount = cfg.slowAmount ?? null;
-        this.slowDuration = cfg.slowDuration ?? null;
         this.color = cfg.color;
         this.glowColor = cfg.glowColor;
         this.bgColor = cfg.bgColor;
         this.specialKey = towerCfg.special;
         this.specialCooldownMs = towerCfg.cooldown ?? 10000;
         this._specialReadyAt = Date.now();
+
+        // Attack system
+        this._allAttacks = getAttacksForType(pokemonType);
+        this.currentAttackIdx = Math.max(0, Math.min(currentAttackIdx, this._allAttacks.length - 1));
+        this._activeAttack = this._getActiveAttack();
 
         // Firing state
         this._fireInterval = 1000 / this.fireRate;
@@ -67,7 +73,7 @@ export class PokemonTower {
         // Visual
         this.selected = false;
         this.dead = false;
-        this._xp = 0;  // XP accumulated (cosmetic for now)
+        this._xp = 0;
         this._levelUpFx = 0;
 
         // Sprite
@@ -78,17 +84,57 @@ export class PokemonTower {
         });
     }
 
-    /** Find best target (furthest along path) in range, skipping weakened enemies */
+    _getActiveAttack() {
+        const atk = this._allAttacks[this.currentAttackIdx];
+        // Fall back to first unlocked attack if current is locked
+        if (!atk || atk.unlockLv > this.level) {
+            const unlocked = getUnlockedAttacks(this.pokemonType, this.level);
+            return unlocked[unlocked.length - 1] ?? this._allAttacks[0];
+        }
+        return atk;
+    }
+
+    /** Change active attack by index */
+    setAttackIdx(idx, pokemonType, level) {
+        const attacks = getAttacksForType(pokemonType ?? this.pokemonType);
+        this._allAttacks = attacks;
+        this.currentAttackIdx = Math.max(0, Math.min(idx, attacks.length - 1));
+        this._activeAttack = this._getActiveAttack();
+    }
+
+    /** Apply incremental stat bonuses when leveling up */
+    applyLevelBonus(newLevel) {
+        this.level = newLevel;
+        const bonus = TOWER_LEVEL_BONUS[newLevel];
+        if (bonus) {
+            this.damage    *= bonus.dmg;
+            this.range     *= bonus.range;
+            this.fireRate  *= bonus.fireRate;
+        }
+        // Re-evaluate active attack in case new attacks unlocked
+        this._activeAttack = this._getActiveAttack();
+    }
+
+    /** Find best target (furthest along path) in range */
     _findTarget(enemies) {
         let best = null, bestProg = -1;
         for (const e of enemies) {
-            if (e.dead || e.weakened) continue;  // don't shoot weakened (already HP=0)
+            if (e.dead || e.weakened) continue;
             const d = dist(this.x, this.y, e.x, e.y);
             if (d <= this.range && e.progress > bestProg) {
                 best = e; bestProg = e.progress;
             }
         }
         return best;
+    }
+
+    /** Find up to n targets sorted by furthest progress */
+    _findTargets(enemies, n) {
+        const inRange = enemies.filter(e =>
+            !e.dead && !e.weakened && dist(this.x, this.y, e.x, e.y) <= this.range
+        );
+        inRange.sort((a, b) => b.progress - a.progress);
+        return inRange.slice(0, n);
     }
 
     update(dt, enemies, addProj) {
@@ -103,34 +149,90 @@ export class PokemonTower {
         if (this._levelUpFx > 0) this._levelUpFx -= dt;
 
         if (this._fireCooldown <= 0) {
-            const target = this._findTarget(enemies);
-            if (target) {
-                this.angle = Math.atan2(target.y - this.y, target.x - this.x);
-                this._shootAnim = 80;
-                this._fireCooldown = this._fireInterval;
+            const atk = this._activeAttack;
+            const effectiveDmg = this.damage * (atk?.dmgMult ?? 1.0) * damageMult;
+            const effectiveRange = this.range * (atk?.rangeMult ?? 1.0);
 
-                const projParams = {
-                    x: this.x, y: this.y, target,
-                    damage: this.damage * damageMult,
-                    speed: this.projSpeed,
-                    attackerType: this.pokemonType,
-                    attacker: this,
-                };
+            const baseParams = {
+                x: this.x, y: this.y,
+                damage: effectiveDmg,
+                speed: this.projSpeed,
+                attackerType: this.pokemonType,
+                attacker: this,
+            };
 
-                // Squirtle gets slowing water projectile
-                if (this.slowAmount) {
-                    addProj(new IceProjectile({
-                        ...projParams,
-                        slowAmount: this.slowAmount,
-                        slowDuration: this.slowDuration,
+            const mode = atk?.mode ?? 'single';
+
+            if (mode === 'multi') {
+                const targets = this._findTargets(enemies, atk.multiCount ?? 3);
+                if (targets.length > 0) {
+                    this.angle = Math.atan2(targets[0].y - this.y, targets[0].x - this.x);
+                    this._shootAnim = 80;
+                    this._fireCooldown = this._fireInterval;
+                    for (const t of targets) {
+                        const proj = this._makeProjectile(mode, { ...baseParams, target: t }, atk);
+                        if (proj) addProj(proj);
+                    }
+                } else {
+                    this._fireCooldown = 150;
+                }
+            } else if (mode === 'aoe') {
+                const target = this._findTarget(enemies);
+                if (target) {
+                    this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    this._shootAnim = 80;
+                    this._fireCooldown = this._fireInterval;
+                    addProj(new CannonProjectile({
+                        ...baseParams, target,
+                        areaRadius: atk.aoeRadius ?? 60,
                     }));
                 } else {
-                    addProj(new DartProjectile(projParams));
+                    this._fireCooldown = 150;
+                }
+            } else if (mode === 'pierce') {
+                const target = this._findTarget(enemies);
+                if (target) {
+                    this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    this._shootAnim = 80;
+                    this._fireCooldown = this._fireInterval;
+                    addProj(new LaserProjectile({
+                        ...baseParams, target,
+                        pierceCount: atk.pierceCount ?? 3,
+                    }));
+                } else {
+                    this._fireCooldown = 150;
                 }
             } else {
-                // No target: reset cooldown to small value so we check frequently
-                this._fireCooldown = 150;
+                // single / slow / dot
+                const target = this._findTarget(enemies);
+                if (target) {
+                    this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    this._shootAnim = 80;
+                    this._fireCooldown = this._fireInterval;
+                    const proj = this._makeProjectile(mode, { ...baseParams, target }, atk);
+                    if (proj) addProj(proj);
+                } else {
+                    this._fireCooldown = 150;
+                }
             }
+        }
+    }
+
+    _makeProjectile(mode, params, atk) {
+        if (mode === 'slow') {
+            return new IceProjectile({
+                ...params,
+                slowAmount: atk.slowAmt ?? 0.35,
+                slowDuration: atk.slowDur ?? 1500,
+            });
+        } else if (mode === 'dot') {
+            return new DotProjectile({
+                ...params,
+                dotDmg: atk.dotDmg ?? 2,
+                dotDur: atk.dotDur ?? 2000,
+            });
+        } else {
+            return new DartProjectile(params);
         }
     }
 
@@ -173,7 +275,7 @@ export class PokemonTower {
             ctx.shadowBlur = 0;
         }
 
-
+        // Level-up FX
         if (this._levelUpFx > 0) {
             const t = this._levelUpFx / 900;
             const pulse = 1 + (1 - t) * 0.35;
@@ -196,7 +298,7 @@ export class PokemonTower {
             ctx.restore();
         }
 
-        // Pokémon sprite inside — same size ratio as wild enemies (r*3.5)
+        // Pokémon sprite
         if (this._img) {
             ctx.imageSmoothingEnabled = false;
             const sz = r * 3.5;
@@ -206,6 +308,21 @@ export class PokemonTower {
             ctx.font = `bold ${Math.floor(r * 0.7)}px monospace`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(`#${this.pokemonId}`, 0, 0);
+        }
+
+        // Level badge (top-right corner)
+        if (this.level > 1) {
+            const bx = r - 2, by = -r + 2;
+            ctx.save();
+            ctx.font = 'bold 9px Inter, sans-serif';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
+            const txt = `Nv${this.level}`;
+            const tw = ctx.measureText(txt).width;
+            ctx.fillRect(bx - tw - 3, by - 1, tw + 6, 12);
+            ctx.fillStyle = this.level >= 7 ? '#ffd700' : (this.level >= 4 ? '#a371f7' : '#3fb950');
+            ctx.fillText(txt, bx, by);
+            ctx.restore();
         }
 
         ctx.restore();
@@ -235,6 +352,7 @@ export class PokemonTower {
 export function createPokemonTower(slot, col, row, cellSize) {
     return new PokemonTower(
         slot.id, slot.starterKey, slot.pokemonId,
-        slot.name, slot.pokemonType, col, row, cellSize, slot.level ?? 1
+        slot.name, slot.pokemonType, col, row, cellSize,
+        slot.level ?? 1, slot.currentAttackIdx ?? 0
     );
 }

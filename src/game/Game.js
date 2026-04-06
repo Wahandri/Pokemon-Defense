@@ -10,6 +10,7 @@ import { SceneManager } from './SceneManager.js';
 import { ScenePlay } from './ScenePlay.js';
 import { SceneGymPlay } from './SceneGymPlay.js';
 import { ScenePC } from './ScenePC.js';
+import { loadSave, updateSave } from '../utils/storage.js';
 
 export class Game {
     constructor() {
@@ -25,7 +26,8 @@ export class Game {
         this.sm = new SceneManager();
 
         // ── App state ─────────────────────────────────────────────────────────
-        this.speed = 1;
+        const saved = loadSave();
+        this.speed = saved.lastSpeed ?? 1;
         this.paused = false;
         this._lastTime = null;
 
@@ -54,6 +56,9 @@ export class Game {
         const pcBtn = document.getElementById('btn-open-pc');
         if (pcBtn) pcBtn.addEventListener('click', () => this.goToPC());
 
+        // ── Restore saved speed ───────────────────────────────────────────────
+        this.ui.setSpeed(this.speed);
+
         // ── Show starter screen ────────────────────────────────────────────────
         this._showStarterScreen();
 
@@ -68,9 +73,9 @@ export class Game {
         this.sm.register('zone', ({ zone }) =>
             new ScenePlay(
                 this.ctx, this.ui, this.trainer,
-                () => { },          // onGameOver (unused)
-                zone,              // zoneConfig
-                () => this.goToZoneSelect()  // onExit
+                () => {},
+                zone,
+                () => this.goToZoneSelect()
             )
         );
 
@@ -133,7 +138,8 @@ export class Game {
         setTimeout(() => this.goToZoneSelect(), 1500);
     }
 
-    // ─── Starter Screen ───────────────────────────────────────────────────────
+
+// ─── Starter Screen ───────────────────────────────────────────────────────
 
     _showStarterScreen() {
         const overlay = document.getElementById('menu-overlay');
@@ -293,6 +299,7 @@ export class Game {
     setSpeed(s) {
         this.speed = s;
         this.ui.setSpeed(s);
+        updateSave({ lastSpeed: s });
     }
 
     // ─── Input ────────────────────────────────────────────────────────────────

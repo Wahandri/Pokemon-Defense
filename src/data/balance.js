@@ -64,7 +64,7 @@ export function applyMod(value, mod) {
     return v;
 }
 
-// ── XP awarded per capture ────────────────────────────────────────────────────
+// ── XP awarded per capture (trainer XP) ──────────────────────────────────────
 export const XP_PER_TIER = {
     red: 12,
     blue: 25,
@@ -72,57 +72,79 @@ export const XP_PER_TIER = {
     t4: 100,
 };
 
+// ── Tower level system (1-10) ─────────────────────────────────────────────────
+// XP needed to advance FROM level n (index = level-1, so [0]=lv1→lv2, etc.)
+export const TOWER_XP_TO_NEXT = [30, 40, 50, 60, 70, 80, 90, 100, 110];
+
+// Incremental stat multipliers applied when reaching each level
+// Stats: damage, range, fireRate
+export const TOWER_LEVEL_BONUS = {
+    2:  { dmg: 1.08, range: 1.00, fireRate: 1.00 },
+    3:  { dmg: 1.00, range: 1.00, fireRate: 1.08 },
+    4:  { dmg: 1.08, range: 1.08, fireRate: 1.00 },  // evolution 1 here
+    5:  { dmg: 1.10, range: 1.00, fireRate: 1.00 },
+    6:  { dmg: 1.00, range: 1.00, fireRate: 1.10 },
+    7:  { dmg: 1.08, range: 1.08, fireRate: 1.00 },  // evolution 2 here
+    8:  { dmg: 1.12, range: 1.00, fireRate: 1.00 },
+    9:  { dmg: 1.00, range: 1.00, fireRate: 1.10 },
+    10: { dmg: 1.15, range: 1.05, fireRate: 1.10 },
+};
+
+// XP gained by tower on weakening a wild Pokémon (only last attacker)
+// formula: Math.round(enemy.wildLevel * XP_WEAKEN_TIER_MULT[enemy.type])
+export const XP_WEAKEN_TIER_MULT = { red: 1, blue: 1.5, green: 2, t4: 3 };
+
 
 // ── Evolution chains (starters + common Gen 1 wild Pokémon) ─────────────────
 // xpRequired: XP this tower's slot needs to reach before allowing manual evolve
 // damageBonus: multiplier applied to tower.damage on evolution (stack-safe ×mult)
 // rangeBonus / fireRateBonus: similar
+// evolvesAtLevel: 4 = primera evolución (nivel 4), 7 = segunda (nivel 7)
+// xpRequired kept for backwards compat but evolution is now triggered by level
 export const EVOLUTION_CHAIN = {
     // ── Starters ──────────────────────────────────────────────────────────────
-    1: { evolvesTo: 2, evolvedName: 'Ivysaur', pokemonType: 'grass', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
-    2: { evolvesTo: 3, evolvedName: 'Venusaur', pokemonType: 'grass', xpRequired: 130, damageBonus: 1.5, rangeBonus: 1.2, fireRateBonus: 1.1 },
-    4: { evolvesTo: 5, evolvedName: 'Charmeleon', pokemonType: 'fire', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.15 },
-    5: { evolvesTo: 6, evolvedName: 'Charizard', pokemonType: 'fire', xpRequired: 130, damageBonus: 1.6, rangeBonus: 1.2, fireRateBonus: 1.2 },
-    7: { evolvesTo: 8, evolvedName: 'Wartortle', pokemonType: 'water', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
-    8: { evolvesTo: 9, evolvedName: 'Blastoise', pokemonType: 'water', xpRequired: 130, damageBonus: 1.5, rangeBonus: 1.25, fireRateBonus: 1.1 },
+    1:   { evolvesTo: 2,   evolvedName: 'Ivysaur',    pokemonType: 'grass',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    2:   { evolvesTo: 3,   evolvedName: 'Venusaur',   pokemonType: 'grass',    evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    4:   { evolvesTo: 5,   evolvedName: 'Charmeleon', pokemonType: 'fire',     evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    5:   { evolvesTo: 6,   evolvedName: 'Charizard',  pokemonType: 'fire',     evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    7:   { evolvesTo: 8,   evolvedName: 'Wartortle',  pokemonType: 'water',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    8:   { evolvesTo: 9,   evolvedName: 'Blastoise',  pokemonType: 'water',    evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Bug types ─────────────────────────────────────────────────────────────
-    10: { evolvesTo: 11, evolvedName: 'Metapod', pokemonType: 'bug', xpRequired: 30, damageBonus: 1.1, rangeBonus: 1.0, fireRateBonus: 1.0 },
-    11: { evolvesTo: 12, evolvedName: 'Butterfree', pokemonType: 'bug', xpRequired: 70, damageBonus: 1.4, rangeBonus: 1.2, fireRateBonus: 1.15 },
-    13: { evolvesTo: 14, evolvedName: 'Kakuna', pokemonType: 'bug', xpRequired: 30, damageBonus: 1.1, rangeBonus: 1.0, fireRateBonus: 1.0 },
-    14: { evolvesTo: 15, evolvedName: 'Beedrill', pokemonType: 'bug', xpRequired: 70, damageBonus: 1.4, rangeBonus: 1.1, fireRateBonus: 1.3 },
+    10:  { evolvesTo: 11,  evolvedName: 'Metapod',    pokemonType: 'bug',      evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    11:  { evolvesTo: 12,  evolvedName: 'Butterfree', pokemonType: 'bug',      evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    13:  { evolvesTo: 14,  evolvedName: 'Kakuna',     pokemonType: 'bug',      evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    14:  { evolvesTo: 15,  evolvedName: 'Beedrill',   pokemonType: 'bug',      evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Normal/Flying ─────────────────────────────────────────────────────────
-    16: { evolvesTo: 17, evolvedName: 'Pidgeotto', pokemonType: 'normal', xpRequired: 50, damageBonus: 1.25, rangeBonus: 1.15, fireRateBonus: 1.1 },
-    17: { evolvesTo: 18, evolvedName: 'Pidgeot', pokemonType: 'normal', xpRequired: 110, damageBonus: 1.5, rangeBonus: 1.3, fireRateBonus: 1.2 },
-    19: { evolvesTo: 20, evolvedName: 'Raticate', pokemonType: 'normal', xpRequired: 45, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.25 },
-    21: { evolvesTo: 22, evolvedName: 'Fearow', pokemonType: 'normal', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.2, fireRateBonus: 1.1 },
+    16:  { evolvesTo: 17,  evolvedName: 'Pidgeotto',  pokemonType: 'normal',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    17:  { evolvesTo: 18,  evolvedName: 'Pidgeot',    pokemonType: 'normal',   evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    19:  { evolvesTo: 20,  evolvedName: 'Raticate',   pokemonType: 'normal',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    21:  { evolvesTo: 22,  evolvedName: 'Fearow',     pokemonType: 'normal',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Poison ────────────────────────────────────────────────────────────────
-    23: { evolvesTo: 24, evolvedName: 'Arbok', pokemonType: 'poison', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    23:  { evolvesTo: 24,  evolvedName: 'Arbok',      pokemonType: 'poison',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Electric ──────────────────────────────────────────────────────────────
-    25: { evolvesTo: 26, evolvedName: 'Raichu', pokemonType: 'electric', xpRequired: 50, damageBonus: 1.4, rangeBonus: 1.1, fireRateBonus: 1.2 },
+    25:  { evolvesTo: 26,  evolvedName: 'Raichu',     pokemonType: 'electric', evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Ground ────────────────────────────────────────────────────────────────
-    27: { evolvesTo: 28, evolvedName: 'Sandslash', pokemonType: 'ground', xpRequired: 50, damageBonus: 1.35, rangeBonus: 1.0, fireRateBonus: 1.1 },
-    // ── Normal/Fairy ──────────────────────────────────────────────────────────
-    35: { evolvesTo: 36, evolvedName: 'Clefable', pokemonType: 'normal', xpRequired: 60, damageBonus: 1.4, rangeBonus: 1.15, fireRateBonus: 1.0 },
-    // ── Fire ──────────────────────────────────────────────────────────────────
-    37: { evolvesTo: 38, evolvedName: 'Ninetales', pokemonType: 'fire', xpRequired: 65, damageBonus: 1.4, rangeBonus: 1.2, fireRateBonus: 1.1 },
-    // ── Jigglypuff ────────────────────────────────────────────────────────────
-    39: { evolvesTo: 40, evolvedName: 'Wigglytuff', pokemonType: 'normal', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    27:  { evolvesTo: 28,  evolvedName: 'Sandslash',  pokemonType: 'ground',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    // ── Normal ────────────────────────────────────────────────────────────────
+    35:  { evolvesTo: 36,  evolvedName: 'Clefable',   pokemonType: 'normal',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    37:  { evolvesTo: 38,  evolvedName: 'Ninetales',  pokemonType: 'fire',     evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    39:  { evolvesTo: 40,  evolvedName: 'Wigglytuff', pokemonType: 'normal',   evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Fighting ──────────────────────────────────────────────────────────────
-    66: { evolvesTo: 67, evolvedName: 'Machoke', pokemonType: 'fighting', xpRequired: 55, damageBonus: 1.35, rangeBonus: 1.0, fireRateBonus: 1.1 },
-    67: { evolvesTo: 68, evolvedName: 'Machamp', pokemonType: 'fighting', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.1, fireRateBonus: 1.2 },
+    66:  { evolvesTo: 67,  evolvedName: 'Machoke',    pokemonType: 'fighting', evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    67:  { evolvesTo: 68,  evolvedName: 'Machamp',    pokemonType: 'fighting', evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Ghost ─────────────────────────────────────────────────────────────────
-    92: { evolvesTo: 93, evolvedName: 'Haunter', pokemonType: 'ghost', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.2, fireRateBonus: 1.1 },
-    93: { evolvesTo: 94, evolvedName: 'Gengar', pokemonType: 'ghost', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.25, fireRateBonus: 1.25 },
+    92:  { evolvesTo: 93,  evolvedName: 'Haunter',    pokemonType: 'ghost',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    93:  { evolvesTo: 94,  evolvedName: 'Gengar',     pokemonType: 'ghost',    evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Rock/Ground ───────────────────────────────────────────────────────────
-    74: { evolvesTo: 75, evolvedName: 'Graveler', pokemonType: 'rock', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.0, fireRateBonus: 1.0 },
-    75: { evolvesTo: 76, evolvedName: 'Golem', pokemonType: 'rock', xpRequired: 120, damageBonus: 1.6, rangeBonus: 1.1, fireRateBonus: 1.0 },
+    74:  { evolvesTo: 75,  evolvedName: 'Graveler',   pokemonType: 'rock',     evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    75:  { evolvesTo: 76,  evolvedName: 'Golem',      pokemonType: 'rock',     evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Water ─────────────────────────────────────────────────────────────────
-    60: { evolvesTo: 61, evolvedName: 'Poliwhirl', pokemonType: 'water', xpRequired: 55, damageBonus: 1.3, rangeBonus: 1.1, fireRateBonus: 1.1 },
-    79: { evolvesTo: 80, evolvedName: 'Slowbro', pokemonType: 'water', xpRequired: 60, damageBonus: 1.3, rangeBonus: 1.2, fireRateBonus: 1.0 },
-    116: { evolvesTo: 117, evolvedName: 'Seadra', pokemonType: 'water', xpRequired: 50, damageBonus: 1.35, rangeBonus: 1.15, fireRateBonus: 1.1 },
-    129: { evolvesTo: 130, evolvedName: 'Gyarados', pokemonType: 'water', xpRequired: 100, damageBonus: 1.8, rangeBonus: 1.3, fireRateBonus: 1.15 },
+    60:  { evolvesTo: 61,  evolvedName: 'Poliwhirl',  pokemonType: 'water',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    79:  { evolvesTo: 80,  evolvedName: 'Slowbro',    pokemonType: 'water',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    116: { evolvesTo: 117, evolvedName: 'Seadra',     pokemonType: 'water',    evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
+    129: { evolvesTo: 130, evolvedName: 'Gyarados',   pokemonType: 'water',    evolvesAtLevel: 7, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
     // ── Eevee ─────────────────────────────────────────────────────────────────
-    133: { evolvesTo: 136, evolvedName: 'Flareon', pokemonType: 'fire', xpRequired: 70, damageBonus: 1.5, rangeBonus: 1.0, fireRateBonus: 1.2 },
+    133: { evolvesTo: 136, evolvedName: 'Flareon',    pokemonType: 'fire',     evolvesAtLevel: 4, damageBonus: 1.0, rangeBonus: 1.0, fireRateBonus: 1.0 },
 };
 
 // ── Starter Tower configs (Pokémon as towers) ─────────────────────────────────

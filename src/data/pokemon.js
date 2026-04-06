@@ -6,7 +6,7 @@
 export function getSpriteUrl(id) {
     // Local sprites are downloaded by tools/build_sprites_gen1.py
     // Once downloaded they are served at this relative path:
-    return `src/data/sprites/gen1/${id}.png`;
+    return `/sprites/gen1/${id}.png`;
 }
 
 // ── Type assignments for Gen 1 Pokémon (partial, coherent) ───────────────────

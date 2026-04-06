@@ -23,7 +23,7 @@ export class Particle {
 
 
 export class FloatingText {
-    constructor(x, y, text, color = '#ffffff', life = 900) {
+    constructor(x, y, text, color = '#ffffff', life = 1400) {
         this.x = x;
         this.y = y;
         this.text = text;
@@ -33,7 +33,7 @@ export class FloatingText {
         this.dead = false;
     }
     update(dt) {
-        this.y -= 24 * (dt / 1000);
+        this.y -= 30 * (dt / 1000);
         this.life -= dt;
         if (this.life <= 0) this.dead = true;
     }
@@ -41,10 +41,10 @@ export class FloatingText {
         const a = Math.max(0, this.life / this.maxLife);
         ctx.save();
         ctx.globalAlpha = a;
-        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.font = 'bold 14px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)';
         ctx.fillStyle = this.color;
         ctx.strokeText(this.text, this.x, this.y);
         ctx.fillText(this.text, this.x, this.y);
