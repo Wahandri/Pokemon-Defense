@@ -3,7 +3,7 @@
 // Visual: sprite displayed on a styled platform.
 // Attacks: type-based attack catalog with unlockable modes.
 
-import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier, TOWER_LEVEL_BONUS } from '../data/balance.js';
+import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier, getLevelBonusMultipliers } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 import { getTowerConfig } from '../data/pokemon_tower_config.js';
 import { getAttacksForType, getUnlockedAttacks } from '../data/pokemon_attacks.js';
@@ -105,12 +105,11 @@ export class PokemonTower {
     /** Apply incremental stat bonuses when leveling up */
     applyLevelBonus(newLevel) {
         this.level = newLevel;
-        const bonus = TOWER_LEVEL_BONUS[newLevel];
-        if (bonus) {
-            this.damage    *= bonus.dmg;
-            this.range     *= bonus.range;
-            this.fireRate  *= bonus.fireRate;
-        }
+        const bonus = getLevelBonusMultipliers(newLevel);
+        this.damage   *= bonus.dmg;
+        this.range    *= bonus.range;
+        this.fireRate *= bonus.fireRate;
+        this._fireInterval = 1000 / Math.max(0.1, this.fireRate);
         // Re-evaluate active attack in case new attacks unlocked
         this._activeAttack = this._getActiveAttack();
     }
@@ -301,7 +300,7 @@ export class PokemonTower {
         // Pokémon sprite
         if (this._img) {
             ctx.imageSmoothingEnabled = false;
-            const sz = r * 3.5;
+            const sz = r * 3.8;
             ctx.drawImage(this._img, -sz / 2, -sz / 2, sz, sz);
         } else {
             ctx.fillStyle = this.color;
@@ -310,18 +309,30 @@ export class PokemonTower {
             ctx.fillText(`#${this.pokemonId}`, 0, 0);
         }
 
-        // Level badge (top-right corner)
+        // Level badge — GBA-style box just below the sprite  
         if (this.level > 1) {
-            const bx = r - 2, by = -r + 2;
+            const sz = r * 3.8;
+            const badgeY = sz / 2 + 2;
             ctx.save();
-            ctx.font = 'bold 9px Inter, sans-serif';
-            ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-            ctx.fillStyle = 'rgba(0,0,0,0.75)';
-            const txt = `Nv${this.level}`;
+            ctx.font = 'bold 8px "Courier New", monospace';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            const txt = `Lv.${this.level}`;
             const tw = ctx.measureText(txt).width;
-            ctx.fillRect(bx - tw - 3, by - 1, tw + 6, 12);
-            ctx.fillStyle = this.level >= 7 ? '#ffd700' : (this.level >= 4 ? '#a371f7' : '#3fb950');
-            ctx.fillText(txt, bx, by);
+            const ph = 10, pw = tw + 10;
+            // GBA stat box: dark blue border + dark bg
+            const lvlColor = this.level >= 7 ? '#f8d040'
+                : this.level >= 4 ? '#c060f8'
+                : '#58d070';
+            ctx.fillStyle = '#181028';  // GBA dark blue-black bg
+            ctx.strokeStyle = lvlColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(-pw / 2, badgeY, pw, ph, 2);
+            ctx.fill();
+            ctx.stroke();
+            // Text
+            ctx.fillStyle = lvlColor;
+            ctx.fillText(txt, 0, badgeY + 1);
             ctx.restore();
         }
 

@@ -1,8 +1,8 @@
 // ─── TrainerSystem ─────────────────────────────────────────────────────────────
-// Trainer progression: level/XP, pokéballs, rareCandy, badges,
+// Trainer progression: level/XP, pokéballs, coins, inventory,
 // party (max 6, can be placed as towers), pcBox (unlimited storage), Pokédex.
 
-import { EVOLUTION_CHAIN, TOWER_XP_TO_NEXT } from '../data/balance.js';
+import { EVOLUTION_CHAIN, xpToNextLevel } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 import { getUnlockedAttacks } from '../data/pokemon_attacks.js';
 
@@ -13,8 +13,11 @@ export class TrainerSystem {
 
     reset() {
         this.pokeballs = 3;
-        this.rareCandy = 0;
+        this.coins = 0;
         this.trainerXP = 0;
+
+        /** Inventory: array of { itemType: string, quantity: number } */
+        this.inventory = [];
 
         /** party: max 6, these can be placed as towers on the map */
         this.party = [];
@@ -31,6 +34,14 @@ export class TrainerSystem {
         this.capturesPerZone = new Map();
         /** Total captured (excluding starter) */
         this.totalCaptures = 0;
+
+        /** Flag: next wave gives double XP to all towers */
+        this.doubleXPNextWave = false;
+        /** Total rounds survived */
+        this.totalRounds = 0;
+        /** Best streak (consecutive non-escaped waves) */
+        this.bestStreak = 0;
+        this._currentStreak = 0;
     }
 
     // ── Backward compat alias ─────────────────────────────────────────────────
@@ -47,7 +58,7 @@ export class TrainerSystem {
             pokemonType: starterConfig.pokemonType,
             starterKey,
             placed: false,
-            level: 1,
+            level: 5,
             xp: 0,
             currentAttackIdx: 0,
         };
@@ -58,11 +69,6 @@ export class TrainerSystem {
 
     // ─── Capture ──────────────────────────────────────────────────────────────
 
-    /**
-     * Add a captured enemy to pcBox (always) and party if not full.
-     * @param {import('../entities/Enemy.js').Enemy} enemy
-     * @param {string} [zoneId]  - zone where it was captured
-     */
     addCaptured(enemy, zoneId = null) {
         const slot = {
             id: `cap_${enemy.pokemonId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -71,22 +77,19 @@ export class TrainerSystem {
             pokemonType: enemy.pokemonType,
             starterKey: null,
             placed: false,
-            level: Math.min(enemy.wildLevel ?? 1, 10),
+            level: Math.min(enemy.wildLevel ?? 1, 100),
             xp: 0,
             currentAttackIdx: 0,
         };
 
-        // Always add to pcBox
         this.pcBox.push(slot);
 
-        // Add to party if there's room
         let addedToParty = false;
         if (this.party.length < 6) {
             this.party.push({ ...slot, id: slot.id + '_p' });
             addedToParty = true;
         }
 
-        // Track captures
         this.totalCaptures++;
         if (zoneId) {
             this.capturesPerZone.set(zoneId, (this.capturesPerZone.get(zoneId) ?? 0) + 1);
@@ -118,24 +121,16 @@ export class TrainerSystem {
 
     // ─── Party ↔ PC Box management ────────────────────────────────────────────
 
-    /**
-     * Swap a party slot with a pcBox slot.
-     * "Empty" party slot is represented by null at that index.
-     */
     swapPartyPC(partyIdx, pcBoxIdx) {
         const partySlot = this.party[partyIdx] ?? null;
         const pcSlot = this.pcBox[pcBoxIdx] ?? null;
         if (!pcSlot) return false;
-
-        // Can't swap a placed Pokémon
         if (partySlot?.placed) return false;
 
         if (partySlot) {
-            // Swap
             this.party[partyIdx] = { ...pcSlot, placed: false };
             this.pcBox[pcBoxIdx] = { ...partySlot, placed: false };
         } else {
-            // Move pcBox → party (if party has < 6 real slots)
             if (this.party.length < 6) {
                 this.party.push({ ...pcSlot, placed: false });
                 this.pcBox.splice(pcBoxIdx, 1);
@@ -144,16 +139,13 @@ export class TrainerSystem {
         return true;
     }
 
-    /** Remove from party (return to pcBox) */
     removeFromParty(partyIdx) {
         const slot = this.party[partyIdx];
         if (!slot || slot.placed) return false;
         this.party.splice(partyIdx, 1);
-        // It stays in pcBox already (duplicate reference)
         return true;
     }
 
-    /** Move a pcBox Pokémon into the party (if party < 6) */
     addToParty(pcBoxIdx) {
         if (this.party.length >= 6) return false;
         const slot = this.pcBox[pcBoxIdx];
@@ -172,30 +164,32 @@ export class TrainerSystem {
         }
     }
 
-    // ─── Slot XP (tower Pokémon, levels 1-10) ────────────────────────────────
+    // ─── Slot XP (tower Pokémon, levels 1-100) ────────────────────────────────
 
     addXPToSlot(slotId, amount) {
         const slot = this._findSlot(slotId);
         if (!slot) return { leveledUp: false };
-        if ((slot.level ?? 1) >= 10) return { leveledUp: false };
+        if ((slot.level ?? 1) >= 100) return { leveledUp: false };
+
+        const effectiveAmount = this.doubleXPNextWave ? amount * 2 : amount;
 
         slot.level = slot.level ?? 1;
-        slot.xp = (slot.xp ?? 0) + amount;
+        slot.xp = (slot.xp ?? 0) + effectiveAmount;
 
         let leveledUp = false;
         let evolved = false;
         let newEvolution = null;
 
-        while (slot.level < 10) {
-            const needed = TOWER_XP_TO_NEXT[slot.level - 1]; // index 0 = level 1 → level 2
+        while (slot.level < 100) {
+            const needed = xpToNextLevel(slot.level);
             if (slot.xp < needed) break;
             slot.xp -= needed;
             slot.level++;
             leveledUp = true;
 
-            // Auto-evolve at levels 4 and 7
-            const evo = EVOLUTION_CHAIN[slot.pokemonId];
-            if (evo?.evolvesAtLevel === slot.level) {
+            // Auto-evolve on level-based evolutions
+            const evoEntry = EVOLUTION_CHAIN[slot.pokemonId];
+            if (evoEntry?.evolvesAtLevel === slot.level) {
                 newEvolution = this._applyEvolution(slot);
                 if (newEvolution.ok) evolved = true;
             }
@@ -204,15 +198,19 @@ export class TrainerSystem {
         return { leveledUp, newLevel: slot.level, evolved, newEvolution };
     }
 
-    _applyEvolution(slot) {
-        const evo = EVOLUTION_CHAIN[slot.pokemonId];
-        if (!evo) return { ok: false };
+    _applyEvolution(slot, evoOverride = null) {
+        const evoEntry = evoOverride ?? EVOLUTION_CHAIN[slot.pokemonId];
+        if (!evoEntry) return { ok: false };
+        // Handle itemEvolutions (Eevee etc.)
+        const evo = evoEntry.itemEvolutions ? null : evoEntry;
+        if (!evo && !evoOverride) return { ok: false, reason: 'needItem' };
+        const target = evo ?? evoOverride;
         this.registerPokedex(slot.pokemonId, slot.name);
-        this.registerPokedex(evo.evolvesTo, evo.evolvedName);
-        slot.pokemonId = evo.evolvesTo;
-        slot.name = evo.evolvedName;
-        slot.pokemonType = evo.pokemonType;
-        return { ok: true, newName: evo.evolvedName, newId: evo.evolvesTo };
+        this.registerPokedex(target.evolvesTo, target.evolvedName);
+        slot.pokemonId = target.evolvesTo;
+        slot.name = target.evolvedName;
+        slot.pokemonType = target.pokemonType;
+        return { ok: true, newName: target.evolvedName, newId: target.evolvesTo, damageBonus: target.damageBonus ?? 1, rangeBonus: target.rangeBonus ?? 1, fireRateBonus: target.fireRateBonus ?? 1 };
     }
 
     canEvolve(slotId) {
@@ -228,14 +226,42 @@ export class TrainerSystem {
         return this._applyEvolution(slot);
     }
 
-    useRareCandyOnSlot(slotId) {
-        if (this.rareCandy <= 0) return { ok: false, reason: 'noCandy' };
+    /**
+     * Use an evolution item on a Pokémon slot.
+     * @param {string} slotId
+     * @param {string} itemType — e.g. 'Thunder Stone'
+     * @returns {{ ok: boolean, reason?: string, newName?: string, newId?: number }}
+     */
+    useItemOnSlot(slotId, itemType) {
         const slot = this._findSlot(slotId);
-        if (!slot) return { ok: false };
-        if ((slot.level ?? 1) >= 10) return { ok: false, reason: 'maxLevel' };
-        this.rareCandy--;
-        const result = this.addXPToSlot(slotId, TOWER_XP_TO_NEXT[slot.level - 1] ?? 999);
-        return { ok: true, ...result };
+        if (!slot) return { ok: false, reason: 'noSlot' };
+
+        const evoEntry = EVOLUTION_CHAIN[slot.pokemonId];
+        if (!evoEntry) return { ok: false, reason: 'cantEvolve' };
+
+        // Multi-item evolution (Eevee)
+        let target = null;
+        if (evoEntry.itemEvolutions) {
+            target = evoEntry.itemEvolutions[itemType] ?? null;
+        } else if (evoEntry.evolvesWithItem === itemType) {
+            target = evoEntry;
+        }
+
+        if (!target) return { ok: false, reason: 'wrongItem' };
+
+        // Check inventory
+        const invEntry = this.inventory.find(i => i.itemType === itemType);
+        if (!invEntry || invEntry.quantity <= 0) return { ok: false, reason: 'noItem' };
+
+        // Consume item
+        invEntry.quantity--;
+        if (invEntry.quantity === 0) {
+            this.inventory = this.inventory.filter(i => i.itemType !== itemType);
+        }
+
+        // Apply evolution
+        const result = this._applyEvolution(slot, target);
+        return result;
     }
 
     /** Returns unlocked attacks for a slot based on its current level */
@@ -259,6 +285,43 @@ export class TrainerSystem {
         return true;
     }
     addPokeball(n = 1) { this.pokeballs += n; }
+
+    // ─── Coins ────────────────────────────────────────────────────────────────
+
+    addCoins(amount) { this.coins += Math.max(0, Math.floor(amount)); }
+    spendCoins(amount) {
+        if (this.coins < amount) return false;
+        this.coins -= amount;
+        return true;
+    }
+    getCoins() { return this.coins; }
+
+    // ─── Inventory ────────────────────────────────────────────────────────────
+
+    addToInventory(itemType, quantity = 1) {
+        const existing = this.inventory.find(i => i.itemType === itemType);
+        if (existing) {
+            existing.quantity += quantity;
+        } else {
+            this.inventory.push({ itemType, quantity });
+        }
+    }
+
+    removeFromInventory(itemType, quantity = 1) {
+        const existing = this.inventory.find(i => i.itemType === itemType);
+        if (!existing || existing.quantity < quantity) return false;
+        existing.quantity -= quantity;
+        if (existing.quantity === 0) {
+            this.inventory = this.inventory.filter(i => i.itemType !== itemType);
+        }
+        return true;
+    }
+
+    getInventory() { return [...this.inventory]; }
+
+    getInventoryCount(itemType) {
+        return this.inventory.find(i => i.itemType === itemType)?.quantity ?? 0;
+    }
 
     // ─── Tower placement tracking ─────────────────────────────────────────────
 

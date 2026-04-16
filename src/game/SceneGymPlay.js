@@ -234,7 +234,7 @@ export class SceneGymPlay {
         const t = this.trainer;
         this.ui.updateHUD?.({
             level: t.level, xp: t.xp, xpToNext: t.xpToNext,
-            pokeballs: t.pokeballs, rareCandy: t.rareCandy,
+            pokeballs: t.pokeballs, coins: t.coins ?? 0,
             wave: `${this._gymWaveIdx + 1}/${this.gym.waves.length}`,
             enemies: this.enemies.filter(e => !e.dead).length,
             zone: this.gym.name,

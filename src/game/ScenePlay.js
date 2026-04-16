@@ -10,11 +10,12 @@ import { Collision } from '../systems/Collision.js';
 import { createEnemy } from '../entities/Enemy.js';
 import { createPokemonTower } from '../entities/PokemonTower.js';
 import { spawnDeathParticles, spawnCaptureEffect, Particle, FloatingText } from '../entities/Particle.js';
-import { RareCandyItem } from '../entities/RareCandyItem.js';
+import { MysteryGiftItem } from '../entities/MysteryGiftItem.js';
 import { MAP1 } from '../data/maps.js';
-import { XP_WEAKEN_TIER_MULT, EVOLUTION_CHAIN, STARTER_TOWER_CONFIG } from '../data/balance.js';
+import { XP_WEAKEN_TIER_MULT, EVOLUTION_CHAIN, STARTER_TOWER_CONFIG, coinsForWave } from '../data/balance.js';
 import { ABILITIES } from '../data/abilities.js';
 import { getSpriteUrl } from '../data/pokemon.js';
+import { ImageCache } from '../utils/ImageCache.js';
 
 export class ScenePlay {
     /**
@@ -47,7 +48,7 @@ export class ScenePlay {
         this.enemies = [];
         this.projectiles = [];
         this.particles = [];
-        this.rareCandyItems = [];   // floating collectible RareCandyItems
+        this.mysteryGiftItems = [];   // floating collectible MysteryGiftItems
 
         // ── Wave system ───────────────────────────────────────────────────────
         this._roundSpawned = 0;
@@ -88,62 +89,143 @@ export class ScenePlay {
 
     // ─── Background Pre-render ────────────────────────────────────────────────
 
+    // ─── Zone type detection helpers ─────────────────────────────────────────
+
+    _getZoneTheme() {
+        const bg = this._zoneBgColor ?? '#1c3320';
+        const id = this.zoneConfig?.id ?? '';
+        if (id.includes('cave') || id === 'mt_moon' || id === 'rock_tunnel') return 'cave';
+        if (id.includes('gym'))       return 'gym';
+        if (id === 'seafoam')         return 'ice';
+        if (id === 'victory_road')    return 'dark';
+        if (id === 'viridian_forest') return 'forest';
+        // Use bgColor hue to guess
+        if (bg.startsWith('#0c0c') || bg.startsWith('#0a0c')) return 'cave';
+        if (bg.startsWith('#0a1a') && bg.endsWith('2e'))      return 'water';
+        return 'grass';
+    }
+
     _buildBackground() {
         this._bgCanvas = document.createElement('canvas');
-        this._bgCanvas.width = CANVAS_W;
+        this._bgCanvas.width  = CANVAS_W;
         this._bgCanvas.height = CANVAS_H;
         const bCtx = this._bgCanvas.getContext('2d');
 
-        // Grass base
-        bCtx.fillStyle = this._zoneBgColor ?? '#1c3320';
-        bCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        const theme = this._getZoneTheme();
 
-        // Subtle tile texture
-        for (let c = 0; c < COLS; c++) {
-            for (let r = 0; r < ROWS; r++) {
-                const shade = (c + r) % 2 === 0 ? 0 : 1;
-                bCtx.fillStyle = shade ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.02)';
-                bCtx.fillRect(c * CELL, r * CELL, CELL, CELL);
+        // ── Tile palette by zone theme ──
+        const THEMES = {
+            grass:  { base: '#78b040', dark: '#588030', light: '#98d060', border: '#487028' },
+            forest: { base: '#3a7828', dark: '#286018', light: '#50a038', border: '#1e4818' },
+            cave:   { base: '#302820', dark: '#201808', light: '#483828', border: '#180e04' },
+            dark:   { base: '#281820', dark: '#180c10', light: '#382030', border: '#100808' },
+            gym:    { base: '#404860', dark: '#282e40', light: '#5860a0', border: '#1e2030' },
+            water:  { base: '#3858a8', dark: '#204880', light: '#5878c8', border: '#182e60' },
+            ice:    { base: '#a8c8e8', dark: '#88a8c8', light: '#c8e0f8', border: '#6890b0' },
+        };
+        const pal = THEMES[theme] ?? THEMES.grass;
 
-                const seed = ((c * 37 + r * 13) % 10);
-                if (seed === 3 || seed === 7) {
-                    const gx = c * CELL + CELL / 2 + (((c * 7 + r * 3) % 10) - 5);
-                    const gy = r * CELL + CELL / 2 + (((c * 3 + r * 11) % 10) - 5);
-                    bCtx.save();
-                    bCtx.strokeStyle = seed === 3 ? '#2a4a2a' : '#244024';
-                    bCtx.lineWidth = 1;
-                    for (let b = -1; b <= 1; b++) {
-                        bCtx.beginPath();
-                        bCtx.moveTo(gx + b * 3, gy + 5);
-                        bCtx.lineTo(gx + b * 3 + b, gy - 5);
-                        bCtx.stroke();
-                    }
-                    bCtx.restore();
-                }
+        // ── 1. Tiled base (2-colour checkerboard like GBA) ──
+        const T = 16; // tile size in pixels
+        for (let ty = 0; ty < CANVAS_H; ty += T) {
+            for (let tx = 0; tx < CANVAS_W; tx += T) {
+                const even = ((tx / T) + (ty / T)) % 2 === 0;
+                bCtx.fillStyle = even ? pal.base : pal.dark;
+                bCtx.fillRect(tx, ty, T, T);
             }
         }
 
-        // Decorative trees
-        const treePositions = [
-            [3, 2], [26, 2], [28, 13], [2, 12], [14, 2], [14, 13],
-            [8, 7], [22, 8], [6, 13], [25, 5], [19, 12], [10, 3],
-        ];
-        for (const [tc, tr] of treePositions) {
-            const tx = tc * CELL + CELL / 2;
-            const ty = tr * CELL + CELL / 2;
-            if (this.pathSystem.isCellBlocked(tc, tr)) continue;
-            const tR = 12 + ((tc + tr) % 4) * 2;
-            const grad = bCtx.createRadialGradient(tx - 3, ty - 3, 2, tx, ty, tR);
-            grad.addColorStop(0, '#4a8a3a');
-            grad.addColorStop(0.6, '#2d6e24');
-            grad.addColorStop(1, '#1a4018');
-            bCtx.beginPath(); bCtx.arc(tx, ty, tR, 0, Math.PI * 2);
-            bCtx.fillStyle = grad; bCtx.fill();
-            bCtx.beginPath(); bCtx.ellipse(tx + 4, ty + tR - 4, tR * 0.6, tR * 0.25, 0.3, 0, Math.PI * 2);
-            bCtx.fillStyle = 'rgba(0,0,0,0.25)'; bCtx.fill();
+        // ── 2. Sub-tile detail pixels (grass blades / rock lines) ──
+        if (theme === 'grass' || theme === 'forest') {
+            bCtx.fillStyle = pal.light;
+            for (let i = 0; i < 300; i++) {
+                const seed = i * 1847 + 31;
+                const sx = (seed % CANVAS_W);
+                const sy = ((seed * 13) % CANVAS_H);
+                bCtx.fillRect(sx, sy, 2, 4);
+                bCtx.fillRect(sx + 1, sy - 1, 1, 2);
+            }
+        } else if (theme === 'cave' || theme === 'dark') {
+            // Rock crack lines
+            bCtx.strokeStyle = pal.border;
+            bCtx.lineWidth = 1;
+            for (let i = 0; i < 18; i++) {
+                const seed = i * 2137 + 77;
+                const sx = (seed % (CANVAS_W - 60)) + 20;
+                const sy = ((seed * 11) % (CANVAS_H - 60)) + 20;
+                bCtx.beginPath();
+                bCtx.moveTo(sx, sy);
+                bCtx.lineTo(sx + (seed % 30) - 15, sy + (seed % 20) + 5);
+                bCtx.stroke();
+            }
+        } else if (theme === 'gym') {
+            // Floor tile grid lines
+            bCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+            bCtx.lineWidth = 1;
+            for (let gx = 0; gx < CANVAS_W; gx += 32) {
+                bCtx.beginPath(); bCtx.moveTo(gx, 0); bCtx.lineTo(gx, CANVAS_H); bCtx.stroke();
+            }
+            for (let gy = 0; gy < CANVAS_H; gy += 32) {
+                bCtx.beginPath(); bCtx.moveTo(0, gy); bCtx.lineTo(CANVAS_W, gy); bCtx.stroke();
+            }
+        } else if (theme === 'ice') {
+            // Ice shimmer
+            bCtx.fillStyle = 'rgba(255,255,255,0.25)';
+            for (let i = 0; i < 60; i++) {
+                const seed = i * 1031 + 7;
+                const ix = (seed % (CANVAS_W - 12)) + 6;
+                const iy = ((seed * 17) % (CANVAS_H - 12)) + 6;
+                bCtx.fillRect(ix, iy, 4, 1);
+                bCtx.fillRect(ix + 1, iy - 1, 2, 1);
+            }
         }
 
-        // Path on top
+        // ── 3. GBA-style trees (round blob trees) ──
+        if (theme === 'grass' || theme === 'forest') {
+            const treePositions = [
+                [1,1],[2,1],[27,1],[28,1], [1,13],[2,13],[27,13],[28,13],
+                [13,1],[14,1],[15,1],       [13,13],[14,13],[15,13],
+                [7,6],[8,6],[21,7],[22,7],
+                [5,12],[24,4],[18,11],[9,2],
+                [3,4],[25,10],[11,4],[20,2],
+            ];
+            const treeColA = theme === 'forest' ? '#1e4a12' : '#2a5a1a';
+            const treeColB = theme === 'forest' ? '#2a6418' : '#3a7028';
+            const treeColC = theme === 'forest' ? '#3a7a22' : '#488030';
+
+            for (const [tc, tr] of treePositions) {
+                if (this.pathSystem.isCellBlocked(tc, tr)) continue;
+                const tx = tc * CELL + CELL / 2;
+                const ty = tr * CELL + CELL / 2;
+                const sz = 14 + ((tc * 3 + tr * 7) % 6);
+
+                // Shadow
+                bCtx.fillStyle = 'rgba(0,0,0,0.3)';
+                bCtx.beginPath();
+                bCtx.ellipse(tx + 3, ty + sz - 2, sz * 0.7, sz * 0.22, 0, 0, Math.PI * 2);
+                bCtx.fill();
+
+                // Tree crown — 3 overlapping circles for GBA look
+                for (const [ox, oy, r, col] of [
+                    [-4, 2, sz * 0.7, treeColA],
+                    [4,  2, sz * 0.7, treeColA],
+                    [0, -2, sz * 0.85, treeColB],
+                    [-2,-4, sz * 0.55, treeColC],
+                ]) {
+                    bCtx.fillStyle = col;
+                    bCtx.beginPath();
+                    bCtx.arc(tx + ox, ty + oy, r, 0, Math.PI * 2);
+                    bCtx.fill();
+                }
+                // Highlight dot
+                bCtx.fillStyle = 'rgba(255,255,255,0.15)';
+                bCtx.beginPath();
+                bCtx.arc(tx - sz * 0.25, ty - sz * 0.3, sz * 0.22, 0, Math.PI * 2);
+                bCtx.fill();
+            }
+        }
+
+        // ── 4. Draw path (road) on top of terrain ──
         this.pathSystem.draw(bCtx, false);
     }
 
@@ -151,7 +233,7 @@ export class ScenePlay {
 
     _bindUI() {
         const { ui } = this;
-        ui.btnStartWave.addEventListener('click', () => this._startWave());
+        ui.btnStartWave?.addEventListener('click', () => this._startWave());
 
         ui.bindBackpackSelect((slotId) => this._selectBackpackSlot(slotId));
 
@@ -167,23 +249,6 @@ export class ScenePlay {
                 this._applyEvolution(this.selectedTower, result);
             } else if (result.reason === 'needMoreXP') {
                 this.ui.showMessage('❌ XP insuficiente para evolucionar', 1800);
-            }
-        });
-
-        // Usar Rare Candy button
-        ui.bindCandyHandler(() => {
-            if (!this.selectedTower) return;
-            if (this.trainer.rareCandy <= 0) {
-                this.ui.showMessage('❌ No tienes Rare Candy', 1500);
-                return;
-            }
-            const result = this.trainer.useRareCandyOnSlot(this.selectedTower.slotId);
-            if (result.ok) {
-                this._applyEvolution(this.selectedTower, result);
-            } else if (result.reason === 'cantEvolve') {
-                this.ui.showMessage(`${this.selectedTower.pokemonName} no puede evolucionar`, 1800);
-            } else if (result.reason === 'noCandy') {
-                this.ui.showMessage('❌ No tienes Rare Candy', 1500);
             }
         });
 
@@ -270,17 +335,26 @@ export class ScenePlay {
         const captureRate = this._roundSpawned > 0 ? this._roundCaptured / this._roundSpawned : 0;
         const goodRound = captureRate >= 0.5;
 
+        // Apply doubleXP flag reset after wave
+        this.trainer.doubleXPNextWave = false;
+
+        // Coin reward
+        const coins = coinsForWave(waveNum, goodRound);
+        this.trainer.addCoins(coins);
+        this._roundCoinsGained = coins;
+
         if (goodRound) {
             this.trainer.addPokeball(1);
             this._roundPokeballsGained++;
-            this.ui.showMessage(`🎉 ¡Buena ronda! +1 Pokébola (${Math.round(captureRate * 100)}%)`, 3000);
+            this.ui.showMessage(`🎉 ¡Buena ronda! +1 Pokébola · +${coins} 💰`, 3000);
         } else {
-            this.ui.showMessage(`✅ Ronda ${waveNum} completada (${Math.round(captureRate * 100)}% capturado)`, 2200);
+            this.ui.showMessage(`✅ Ronda ${waveNum} completada · +${coins} 💰`, 2200);
         }
 
-        if (waveNum > 0 && waveNum % 5 === 0) {
-            this.rareCandyItems.push(new RareCandyItem());
-            this.ui.showMessage('🍬 ¡Caramelo Raro disponible en el mapa!', 2500);
+        // Mystery gift every 3 waves
+        if (waveNum > 0 && waveNum % 3 === 0) {
+            this.mysteryGiftItems.push(new MysteryGiftItem());
+            this.ui.showMessage('🎁 ¡Regalo misterioso en el mapa!', 2500);
         }
 
         this.ui.showRoundClear({
@@ -288,6 +362,7 @@ export class ScenePlay {
             escaped: this._roundEscaped,
             xpGained: this._roundXpGained,
             pokeballsGained: this._roundPokeballsGained,
+            coinsGained: this._roundCoinsGained ?? 0,
         });
 
         if (waveNum >= 10) {
@@ -489,18 +564,12 @@ export class ScenePlay {
     }
 
     onClick(x, y) {
-        // Check RareCandy collectibles first
-        for (const item of this.rareCandyItems) {
+        // Check mystery gift collectibles first
+        for (const item of this.mysteryGiftItems) {
             if (!item.dead && item.contains(x, y)) {
-                item.dead = true;
-                this.trainer.rareCandy++;
-                this.ui.showMessage('🍬 +1 Rare Candy recogido!', 2000);
-                this._updateHUD();
-                // Refresh tower panel if a tower is selected (button text updates)
-                if (this.selectedTower) {
-                    const slot = this.trainer.getSlot(this.selectedTower.slotId);
-                    this.ui.showTowerInfoPokemon(this.selectedTower, slot, this.trainer);
-                }
+                item.collect();
+                const giftItem = item.item;
+                this._applyMysteryItem(giftItem);
                 return;
             }
         }
@@ -562,6 +631,37 @@ export class ScenePlay {
         }
     }
 
+    // ─── Mystery Gift ─────────────────────────────────────────────────────────
+
+    _applyMysteryItem(giftItem) {
+        const { itemType, emoji, effect, description, qty = 1 } = giftItem;
+        switch (effect) {
+            case 'pokeball':
+                this.trainer.addPokeball(qty);
+                this.ui.showMessage(`${emoji} ¡${itemType}! +${qty} Pokébola`, 2500);
+                break;
+            case 'inventory':
+                this.trainer.addToInventory(itemType, 1);
+                this.ui.showMessage(`${emoji} ¡${itemType}! Añadido a la mochila`, 2500);
+                break;
+            case 'doubleXP':
+                this.trainer.doubleXPNextWave = true;
+                this.ui.showMessage(`${emoji} ¡${description}`, 2500);
+                break;
+            case 'ppMax':
+                this.trainer.addToInventory(itemType, 1);
+                this.ui.showMessage(`${emoji} ¡PP Máx! Úsalo desde la mochila`, 2500);
+                break;
+            case 'sellable':
+            case 'cosmetic':
+            default:
+                this.trainer.addToInventory(itemType, 1);
+                this.ui.showMessage(`${emoji} ¡${itemType}! ${description}`, 2500);
+                break;
+        }
+        this._updateHUD();
+    }
+
     // ─── HUD Update ───────────────────────────────────────────────────────────
 
     _updateHUD() {
@@ -569,7 +669,7 @@ export class ScenePlay {
         const t = this.trainer;
         this.ui.updateHUD({
             pokeballs: t.pokeballs,
-            rareCandy: t.rareCandy,
+            coins: t.coins,
             wave: ws.waveNumber,
             enemies: this.enemies.filter(e => !e.dead).length,
             zone: this.zoneConfig?.name ?? '—',
@@ -651,14 +751,14 @@ export class ScenePlay {
         // Particles
         for (const p of this.particles) p.update(dt);
 
-        // RareCandy items
-        for (const item of this.rareCandyItems) item.update(dt);
+        // Mystery gift items
+        for (const item of this.mysteryGiftItems) item.update(dt);
 
         // Cleanup dead entities
         this.enemies = this.enemies.filter(e => !e.dead);
         this.projectiles = this.projectiles.filter(p => !p.dead);
         this.particles = this.particles.filter(p => !p.dead);
-        this.rareCandyItems = this.rareCandyItems.filter(i => !i.dead);
+        this.mysteryGiftItems = this.mysteryGiftItems.filter(i => !i.dead);
 
         // After spawning is done and all enemies gone → wave clear
         if (this.waveSystem._spawnDone && this.enemies.length === 0 && this.waveSystem.isRunning) {
@@ -699,8 +799,8 @@ export class ScenePlay {
         // 7. Enemies
         for (const enemy of this.enemies) enemy.draw(ctx, this.debug);
 
-        // 8. Rare Candy items (on top of map, below UI)
-        for (const item of this.rareCandyItems) item.draw(ctx);
+        // 8. Mystery gift items (on top of map, below UI)
+        for (const item of this.mysteryGiftItems) item.draw(ctx);
 
         // 9. Particles
         for (const p of this.particles) p.draw(ctx);
@@ -732,19 +832,25 @@ export class ScenePlay {
 
         const cx = ghostCol * CELL + CELL / 2;
         const cy = ghostRow * CELL + CELL / 2;
+        const r  = CELL / 2 - 2;
 
-        // Get range from selected slot's config
+        // Get range + sprite from selected slot
         let towerRange = 110;
+        let ghostImg   = null;
+
         if (this.selectedSlotId) {
             const slot = this.trainer.getSlot(this.selectedSlotId);
             if (slot?.starterKey && STARTER_TOWER_CONFIG[slot.starterKey]) {
                 towerRange = STARTER_TOWER_CONFIG[slot.starterKey].range;
             }
+            if (slot?.pokemonId) {
+                ghostImg = ImageCache.get(getSpriteUrl(slot.pokemonId));
+            }
         }
 
         ctx.save();
 
-        // Range circle (behind the cell highlight)
+        // ── Range circle (behind everything) ──
         ctx.beginPath();
         ctx.arc(cx, cy, towerRange, 0, Math.PI * 2);
         ctx.fillStyle = ghostValid
@@ -759,15 +865,32 @@ export class ScenePlay {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Cell highlight
-        ctx.fillStyle = ghostValid ? 'rgba(63,185,80,0.22)' : 'rgba(248,81,73,0.22)';
-        ctx.strokeStyle = ghostValid ? 'rgba(63,185,80,0.9)' : 'rgba(248,81,73,0.9)';
-        ctx.lineWidth = 1.5;
+        // ── Cell tint ──
+        ctx.fillStyle   = ghostValid ? 'rgba(63,185,80,0.18)' : 'rgba(248,81,73,0.18)';
+        ctx.strokeStyle = ghostValid ? 'rgba(63,185,80,0.8)'  : 'rgba(248,81,73,0.8)';
+        ctx.lineWidth   = 1.5;
         ctx.fillRect(ghostCol * CELL, ghostRow * CELL, CELL, CELL);
         ctx.strokeRect(ghostCol * CELL, ghostRow * CELL, CELL, CELL);
 
+        // ── Pokémon sprite ghost (same size as placed tower) ──
+        if (ghostImg) {
+            const sz = r * 3.8;
+            ctx.globalAlpha = 0.58;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(ghostImg, cx - sz / 2, cy - sz / 2, sz, sz);
+            ctx.globalAlpha = 1;
+        } else {
+            // Fallback: simple semi-transparent circle
+            ctx.globalAlpha = 0.45;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fillStyle = ghostValid ? '#3fb950' : '#f85149';
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+
         ctx.restore();
     }
+
 
     _drawPokeballCursor(ctx, x, y) {
         ctx.save();
@@ -804,6 +927,7 @@ export class ScenePlay {
         this.enemies = [];
         this.projectiles = [];
         this.particles = [];
+        this.mysteryGiftItems = [];
         this.occupiedCells.clear();
         this.waveSystem.reset();
         this.trainer.returnAllToBackpack();

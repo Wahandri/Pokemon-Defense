@@ -4,7 +4,7 @@
 // Click to move Pokémon between party and box.
 
 import { getSpriteUrl } from '../data/pokemon.js';
-import { EVOLUTION_CHAIN, TOWER_XP_TO_NEXT } from '../data/balance.js';
+import { EVOLUTION_CHAIN, xpToNextLevel } from '../data/balance.js';
 
 export class ScenePC {
     /**
@@ -48,7 +48,7 @@ export class ScenePC {
               </div>
             </div>
             <div class="pc-footer" id="pc-footer">
-              <span style="color:var(--text-dim);font-size:11px">Haz clic en un Pokémon de PC Box para moverlo al equipo, o en uno del equipo para quitarlo. Rare Candy: ${this.trainer.rareCandy}</span>
+              <span style="color:var(--text-dim);font-size:11px">Haz clic en un Pokémon de PC Box para moverlo al equipo, o en uno del equipo para quitarlo.</span>
             </div>
           </div>
         `;
@@ -74,16 +74,15 @@ export class ScenePC {
             if (slot) {
                 const evo = EVOLUTION_CHAIN[slot.pokemonId];
                 const lv = slot.level ?? 1;
-                const xpNeeded = lv < 10 ? (TOWER_XP_TO_NEXT[lv - 1] ?? 0) : 0;
+                const xpNeeded = lv < 100 ? xpToNextLevel(lv) : 0;
                 const xpPct = xpNeeded > 0 ? Math.min(100, Math.round(((slot.xp ?? 0) / xpNeeded) * 100)) : 100;
                 el.innerHTML = `
                   <img src="${getSpriteUrl(slot.pokemonId)}" alt="${slot.name}" width="40" height="40" style="image-rendering:pixelated">
                   <div class="pc-slot-info">
                     <div class="pc-slot-name">${slot.name} ${slot.placed ? '📌' : ''}</div>
-                    <div class="pc-slot-type" style="font-size:10px;color:var(--text-dim)">${slot.pokemonType}</div>
-                    ${evo ? `<div class="pc-xp-bar-bg"><div class="pc-xp-bar-fill" style="width:${xpPct}%"></div></div>` : ''}
+                    <div class="pc-slot-type" style="font-size:10px;color:var(--text-dim)">${slot.pokemonType} · Nv${lv}</div>
+                    <div class="pc-xp-bar-bg"><div class="pc-xp-bar-fill" style="width:${xpPct}%"></div></div>
                   </div>
-                  ${(evo && this.trainer.rareCandy > 0 && !slot.placed) ? `<button class="pc-candy-btn" data-slot-id="${slot.id}" style="font-size:9px">🍬</button>` : ''}
                   ${(!slot.placed) ? `<button class="pc-remove-btn" data-party-idx="${i}">↩</button>` : ''}
                 `;
                 el.addEventListener('click', () => {
@@ -100,21 +99,6 @@ export class ScenePC {
             container.appendChild(el);
         }
 
-        // Wire remove buttons directly (inside the click above)
-        container.querySelectorAll('.pc-candy-btn').forEach(btn => {
-            btn.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                const slotId = btn.getAttribute('data-slot-id');
-                const result = this.trainer.useRareCandyOnSlot(slotId);
-                if (!result.ok) {
-                    this._showMsg('❌ No se pudo usar Rare Candy en este Pokémon.');
-                    return;
-                }
-                this._showMsg(`🌟 ${result.newName} evolucionó con Rare Candy. (${this.trainer.rareCandy} restantes)`);
-                this._renderParty();
-                this._renderBox();
-            });
-        });
     }
 
     _renderBox() {
@@ -134,7 +118,6 @@ export class ScenePC {
             card.innerHTML = `
               <img src="${getSpriteUrl(slot.pokemonId)}" alt="${slot.name}" width="32" height="32" style="image-rendering:pixelated;display:block;margin:0 auto">
               <div style="font-size:9px;text-align:center;color:var(--text);margin-top:2px">${slot.name}</div>
-              ${(EVOLUTION_CHAIN[slot.pokemonId] && this.trainer.rareCandy > 0) ? `<button class="pc-box-candy" data-slot-id="${slot.id}" style="font-size:8px;margin-top:2px">🍬 usar</button>` : ''}
               ${inParty ? '<div style="font-size:8px;text-align:center;color:#a371f7">En equipo</div>' : ''}
             `;
             card.addEventListener('click', () => {
@@ -152,20 +135,6 @@ export class ScenePC {
             grid.appendChild(card);
         });
 
-        grid.querySelectorAll('.pc-box-candy').forEach(btn => {
-            btn.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                const slotId = btn.getAttribute('data-slot-id');
-                const result = this.trainer.useRareCandyOnSlot(slotId);
-                if (!result.ok) {
-                    this._showMsg('❌ No se pudo usar Rare Candy en este Pokémon.');
-                    return;
-                }
-                this._showMsg(`🌟 ${result.newName} evolucionó con Rare Candy. (${this.trainer.rareCandy} restantes)`);
-                this._renderParty();
-                this._renderBox();
-            });
-        });
     }
 
     _showMsg(text) {

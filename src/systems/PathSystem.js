@@ -110,78 +110,90 @@ export class PathSystem {
         const pts = this.waypoints;
         if (pts.length < 2) return;
 
-        // Draw path edge (slightly wider, darker)
         ctx.save();
+
+        // ── Layer 1: outer dark border (soil edge / shadow) ──
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.lineWidth = PATH_WIDTH + 6;
-        ctx.strokeStyle = '#5a4a30';
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        ctx.lineWidth = PATH_WIDTH + 10;
+        ctx.strokeStyle = '#3a2810';
+        ctx.lineCap = 'square';
+        ctx.lineJoin = 'miter';
         ctx.stroke();
 
-        // Draw path fill
+        // ── Layer 2: medium border (darker dirt) ──
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.lineWidth = PATH_WIDTH + 4;
+        ctx.strokeStyle = '#6a4c28';
+        ctx.stroke();
+
+        // ── Layer 3: main road fill (light tan / sandy dirt — GBA style) ──
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
         ctx.lineWidth = PATH_WIDTH;
-        ctx.strokeStyle = '#8c7a56';
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#c09858';
         ctx.stroke();
 
-        // Path center line (lighter, decorative)
+        // ── Layer 4: lighter center highlight strip ──
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = Math.max(4, PATH_WIDTH * 0.35);
+        ctx.strokeStyle = '#d8b870';
         ctx.stroke();
-        ctx.restore();
 
-        // Start marker
-        ctx.save();
-        ctx.fillStyle = '#3fb950';
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+        // ── Layer 5: dashed center line (like GBA road marking) ──
         ctx.beginPath();
-        ctx.arc(pts[0].x, pts[0].y, 10, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,240,160,0.3)';
+        ctx.setLineDash([12, 14]);
         ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px Inter';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('IN', pts[0].x, pts[0].y);
+        ctx.setLineDash([]);
+
         ctx.restore();
 
-        // End marker
+        // ── GBA arrow sign — entry ──
+        const drawSign = (x, y, label, color, borderColor) => {
+            const R = 11;
+            ctx.save();
+            // Sign border (pixel shadow)
+            ctx.fillStyle = borderColor;
+            ctx.fillRect(x - R - 2, y - R - 2, R * 2 + 4, R * 2 + 4);
+            // Sign body
+            ctx.fillStyle = color;
+            ctx.fillRect(x - R, y - R, R * 2, R * 2);
+            // Top shine
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.fillRect(x - R + 2, y - R + 2, R * 2 - 6, 3);
+            // Label
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 9px "Orbitron", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // outline
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 2;
+            ctx.strokeText(label, x, y);
+            ctx.fillText(label, x, y);
+            ctx.restore();
+        };
+
+        drawSign(pts[0].x, pts[0].y, 'IN', '#287820', '#0a2808');
         const last = pts[pts.length - 1];
-        ctx.save();
-        ctx.fillStyle = '#f85149';
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(last.x, last.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 8px Inter';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('OUT', last.x, last.y);
-        ctx.restore();
+        drawSign(last.x, last.y, 'OUT', '#a82020', '#380808');
 
         if (debug) {
-            // Draw waypoint numbers
             ctx.save();
-            ctx.fillStyle = 'rgba(255,220,0,0.8)';
-            ctx.font = '11px monospace';
+            ctx.fillStyle = 'rgba(255,220,0,0.9)';
+            ctx.font = '10px monospace';
             pts.forEach((p, i) => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
                 ctx.fillText(i, p.x + 7, p.y - 7);
             });
             ctx.restore();

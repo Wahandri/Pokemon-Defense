@@ -1,70 +1,57 @@
 // ─── UI Manager ───────────────────────────────────────────────────────────────
 import { getSpriteUrl } from '../data/pokemon.js';
-import { EVOLUTION_CHAIN, TOWER_XP_TO_NEXT } from '../data/balance.js';
+import { EVOLUTION_CHAIN, xpToNextLevel } from '../data/balance.js';
 import { getAttacksForType, getUnlockedAttacks, MODE_LABELS } from '../data/pokemon_attacks.js';
 
 export class UI {
     constructor() {
-        this.valCaptures = document.getElementById('val-captures');
+        // Header stats
+        this.valCoins     = document.getElementById('val-coins');
         this.valPokeballs = document.getElementById('val-pokeballs');
-        this.valCandy = document.getElementById('val-candy');
-        this.valWave = document.getElementById('val-wave');
-        this.valEnemies = document.getElementById('val-enemies');
+        this.valWave      = document.getElementById('val-wave');
 
+        // Sidebar controls
         this.btnStartWave = document.getElementById('btn-start-wave');
-        this.btnPause = document.getElementById('btn-pause');
-        this.btnReset = document.getElementById('btn-reset');
-        this.btnSpeed1 = document.getElementById('btn-speed1');
-        this.btnSpeed2 = document.getElementById('btn-speed2');
-        this.btnSpeed4 = document.getElementById('btn-speed4');
+        this.btnPause     = document.getElementById('btn-pause');
+        this.btnReset     = document.getElementById('btn-reset');
+        this.btnSpeed1    = document.getElementById('btn-speed1');
+        this.btnSpeed2    = document.getElementById('btn-speed2');
+        this.btnSpeed4    = document.getElementById('btn-speed4');
         this.specialSlots = document.getElementById('special-slots');
 
-        this.towerInfoPanel = document.getElementById('tower-info');
-        this.towerInfoName = document.getElementById('tower-info-name');
+        // Tower info panel (sidebar)
+        this.towerInfoPanel  = document.getElementById('tower-info');
+        this.towerInfoName   = document.getElementById('tower-info-name');
         this.towerInfoSprite = document.getElementById('tower-info-sprite');
-        this.towerInfoStats = document.getElementById('tower-stats');
-        this.towerButtons = document.getElementById('tower-buttons');
+        this.towerInfoStats  = document.getElementById('tower-stats');
 
-        this._pokedexGrid = document.getElementById('pokedex-grid');
+        // Pokédex
+        this._pokedexGrid  = document.getElementById('pokedex-grid');
         this._pokedexCount = document.getElementById('pokedex-count');
 
-        this.menuOverlay = document.getElementById('menu-overlay');
-        this.btnPlay = document.getElementById('btn-play');
+        // Menu / overlays
+        this.menuOverlay  = document.getElementById('menu-overlay');
+        this.btnPlay      = document.getElementById('btn-play');
         this.pausedBanner = document.getElementById('paused-banner');
-        this._msgEl = document.getElementById('msg');
-        this._msgTimer = null;
-        this._roundClearEl = document.getElementById('round-clear');
+
+        // Toast & round clear
+        this._msgEl          = document.getElementById('msg');
+        this._msgTimer       = null;
+        this._roundClearEl   = document.getElementById('round-clear');
         this._roundClearTimer = null;
 
-        // ── Handlers (set from ScenePlay) ─────────────────────────────────────
-        this._pickupHandler = null;   // NOTE: never set to null again after init — bug fix
-        this._evolveHandler = null;   // (slotId) → void
-        this._candyHandler = null;   // (slotId) → void
-        this._specialHandler = null; // (slotIdx) → void
+        // ── Handlers set from ScenePlay ───────────────────────────────────────
+        this._pickupHandler  = null;
+        this._evolveHandler  = null;
+        this._specialHandler = null;
 
-        // Sell / Recuperar button
+        // Recuperar / Sell button (sidebar tower panel)
         const sellBtn = document.getElementById('btn-sell');
-        if (sellBtn) {
-            sellBtn.addEventListener('click', () => {
-                if (this._pickupHandler) this._pickupHandler();
-            });
-        }
+        if (sellBtn) sellBtn.addEventListener('click', () => this._pickupHandler?.());
 
         // Evolucionar button
         const evoBtn = document.getElementById('btn-evolve');
-        if (evoBtn) {
-            evoBtn.addEventListener('click', () => {
-                if (this._evolveHandler) this._evolveHandler();
-            });
-        }
-
-        // Usar Rare Candy button
-        const candyBtn = document.getElementById('btn-use-candy');
-        if (candyBtn) {
-            candyBtn.addEventListener('click', () => {
-                if (this._candyHandler) this._candyHandler();
-            });
-        }
+        if (evoBtn) evoBtn.addEventListener('click', () => this._evolveHandler?.());
 
         this._buildSpecialSlotButtons();
     }
@@ -75,9 +62,7 @@ export class UI {
         for (let i = 0; i < 6; i++) {
             const btn = document.createElement('button');
             btn.className = 'btn-secondary special-slot-btn';
-            btn.innerHTML = `
-              <span style="font-size:9px;color:var(--text-dim);font-family:'Orbitron',sans-serif">S${i + 1}</span>
-            `;
+            btn.innerHTML = `<span style="font-size:9px;color:var(--text-dim);font-family:'Orbitron',sans-serif">S${i + 1}</span>`;
             btn.addEventListener('click', () => this._specialHandler?.(i));
             this.specialSlots.appendChild(btn);
         }
@@ -113,20 +98,22 @@ export class UI {
         }
     }
 
-    // ─── HUD ──────────────────────────────────────────────────────────────────
+    // ─── HUD (header stats) ───────────────────────────────────────────────────
 
-    updateHUD({ pokeballs, rareCandy, wave, enemies, zone, badges, captures }) {
+    updateHUD({ pokeballs, coins, wave, enemies, zone, badges, captures }) {
         if (this.valPokeballs) this.valPokeballs.textContent = pokeballs;
-        if (this.valCandy) this.valCandy.textContent = rareCandy;
-        if (this.valWave) this.valWave.textContent = wave;
-        if (this.valEnemies) this.valEnemies.textContent = enemies;
+        if (this.valCoins)     this.valCoins.textContent = coins ?? 0;
+        if (this.valWave)      this.valWave.textContent = wave;
+
+        // Sidebar-only extras
+        const enemiesEl = document.getElementById('val-enemies');
+        if (enemiesEl) enemiesEl.textContent = enemies;
         const zoneEl = document.getElementById('val-zone');
         if (zoneEl && zone) zoneEl.textContent = zone;
         const badgeEl = document.getElementById('val-badges');
         if (badgeEl && badges !== undefined) badgeEl.textContent = '🏅'.repeat(badges) || '—';
-        if (this.valCaptures && captures !== undefined) {
-            this.valCaptures.textContent = captures;
-        }
+        const capturesEl = document.getElementById('val-captures');
+        if (capturesEl && captures !== undefined) capturesEl.textContent = captures;
     }
 
     setStartWaveButton({ waveNum, enabled, running, label = null }) {
@@ -156,25 +143,28 @@ export class UI {
         });
     }
 
-    // ─── Backpack / Tower Selector ────────────────────────────────────────────
+    // ─── Backpack modal (party list) ──────────────────────────────────────────
 
     rebuildBackpackUI(backpack, selectedSlotId, roundRunning) {
-        if (!this.towerButtons) return;
-        this.towerButtons.innerHTML = '';
+        const container = document.getElementById('tower-buttons');
+        if (!container) return;
+        container.innerHTML = '';
 
         if (backpack.length === 0) {
-            this.towerButtons.innerHTML = '<span style="font-size:10px;color:var(--text-dim)">¡Captura Pokémon para usarlos como torres!</span>';
+            container.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">¡Captura Pokémon para usarlos como torres!</span>';
             return;
         }
 
         for (const slot of backpack) {
             const lv = slot.level ?? 1;
-            const xpNeeded = lv < 10 ? (TOWER_XP_TO_NEXT[lv - 1] ?? 0) : 0;
+            const xpNeeded = lv < 100 ? xpToNextLevel(lv) : 0;
             const xpCur = slot.xp ?? 0;
             const xpPct = xpNeeded > 0 ? Math.min(100, Math.round((xpCur / xpNeeded) * 100)) : 100;
             const evo = EVOLUTION_CHAIN[slot.pokemonId];
-            const canEvo = evo && evo.evolvesAtLevel && lv >= evo.evolvesAtLevel;
-            const isMaxLv = lv >= 10;
+            const canEvoLevel = evo?.evolvesAtLevel && lv >= evo.evolvesAtLevel;
+            const canEvoItem  = evo?.evolvesWithItem || evo?.itemEvolutions;
+            const canEvo = canEvoLevel || canEvoItem;
+            const isMaxLv = lv >= 100;
 
             const btn = document.createElement('button');
             btn.className = 'tower-btn';
@@ -183,17 +173,22 @@ export class UI {
             if (canEvo) btn.classList.add('can-evolve');
 
             const statusIcon = slot.placed ? '📌 ' : '';
-            const lvColor = lv >= 7 ? '#ffd700' : lv >= 4 ? '#a371f7' : '#3fb950';
+            const lvColor = lv >= 55 ? '#ff6b6b' : lv >= 32 ? '#ffd700' : lv >= 16 ? '#a371f7' : '#3fb950';
             const xpBarColor = isMaxLv ? '#ffd700' : (xpPct >= 80 ? '#3fb950' : '#a371f7');
             const xpBarHTML = `<div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:2px">
                      <div style="height:3px;background:${xpBarColor};width:${xpPct}%;border-radius:2px;transition:width .3s"></div>
                    </div>`;
+
+            let evoHint = '';
+            if (canEvoItem) evoHint = `<span style="font-size:8px;color:#e3b341">🪨 ${evo.evolvesWithItem ?? '?'}</span>`;
+            else if (canEvoLevel) evoHint = `<span style="font-size:8px;color:#f0c040">⭐ Puede evolucionar</span>`;
 
             btn.innerHTML = `
               <img src="${getSpriteUrl(slot.pokemonId)}" width="28" height="28" style="image-rendering:pixelated;flex-shrink:0">
               <div class="tower-info">
                 <div class="tower-name">${statusIcon}${slot.name} <span style="color:${lvColor};font-size:9px">Nv${lv}</span></div>
                 <div class="tower-cost" style="color:var(--text-dim);font-size:10px">${slot.pokemonType}${isMaxLv ? ' · MAX' : ` · ${xpCur}/${xpNeeded} XP`}</div>
+                ${evoHint}
                 ${xpBarHTML}
               </div>
             `;
@@ -203,7 +198,7 @@ export class UI {
                     bubbles: true, detail: { slotId: slot.id }
                 }));
             });
-            this.towerButtons.appendChild(btn);
+            container.appendChild(btn);
         }
     }
 
@@ -211,14 +206,8 @@ export class UI {
         document.addEventListener('backpack-select', (e) => handler(e.detail.slotId));
     }
 
-    // ─── Tower Info Panel ─────────────────────────────────────────────────────
+    // ─── Tower Info Panel (sidebar, shown when tower selected) ───────────────
 
-    /**
-     * Show tower info with XP bar + evolve button.
-     * @param {PokemonTower} tower
-     * @param {object} slot  - backpack slot (has .xp, .xpToEvolve)
-     * @param {TrainerSystem} trainer
-     */
     showTowerInfoPokemon(tower, slot, trainer) {
         if (!this.towerInfoPanel) return;
         this.towerInfoPanel.classList.add('visible');
@@ -227,10 +216,8 @@ export class UI {
 
         const lv = slot?.level ?? 1;
         const slotXP = slot?.xp ?? 0;
-        const xpNeeded = lv < 10 ? (TOWER_XP_TO_NEXT[lv - 1] ?? 0) : 0;
+        const xpNeeded = lv < 100 ? xpToNextLevel(lv) : 0;
         const xpPct = xpNeeded > 0 ? Math.min(100, Math.round((slotXP / xpNeeded) * 100)) : 100;
-        const evo = EVOLUTION_CHAIN[tower.pokemonId];
-        const canEvo = evo && evo.evolvesAtLevel && lv >= evo.evolvesAtLevel;
 
         // Attack selector
         const allAttacks = getAttacksForType(tower.pokemonType);
@@ -258,11 +245,11 @@ export class UI {
             const xpBarHTML = `
               <div style="grid-column:span 2;background:rgba(255,255,255,0.06);border-radius:6px;padding:5px 7px">
                 <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-bottom:3px">
-                  <span>📈 XP (Nv ${lv}${lv >= 10 ? ' MAX' : ''})</span>
-                  <span>${lv < 10 ? `${slotXP}/${xpNeeded}` : 'MAX'}</span>
+                  <span>📈 XP (Nv ${lv}${lv >= 100 ? ' MAX' : ''})</span>
+                  <span>${lv < 100 ? `${slotXP}/${xpNeeded}` : 'MAX'}</span>
                 </div>
                 <div style="height:5px;background:rgba(255,255,255,0.1);border-radius:3px">
-                  <div style="height:5px;background:${lv >= 10 ? '#ffd700' : '#a371f7'};width:${xpPct}%;border-radius:3px;transition:width .4s"></div>
+                  <div style="height:5px;background:${lv >= 100 ? '#ffd700' : '#a371f7'};width:${xpPct}%;border-radius:3px;transition:width .4s"></div>
                 </div>
               </div>`;
             this.towerInfoStats.innerHTML = `
@@ -274,7 +261,6 @@ export class UI {
               ${attackSelectorHTML}
             `;
 
-            // Bind attack button clicks via delegation
             const selectorEl = this.towerInfoStats.querySelector(`#attack-selector-${slot?.id ?? tower.slotId}`);
             if (selectorEl) {
                 selectorEl.addEventListener('click', (e) => {
@@ -287,19 +273,9 @@ export class UI {
             }
         }
 
-        // Evolucionar button — hide (evolution is automatic now)
+        // Evolucionar button — show only for level-based evolution
         const evoBtn = document.getElementById('btn-evolve');
         if (evoBtn) evoBtn.style.display = 'none';
-
-        // Usar Rare Candy button
-        const candyBtn = document.getElementById('btn-use-candy');
-        if (candyBtn) {
-            const hasCandy = (trainer?.rareCandy ?? 0) > 0;
-            const canUse = lv < 10 && hasCandy;
-            candyBtn.style.display = '';
-            candyBtn.disabled = !canUse;
-            candyBtn.textContent = `🍬 Rare Candy (${trainer?.rareCandy ?? 0})`;
-        }
 
         const sellBtn = document.getElementById('btn-sell');
         if (sellBtn) sellBtn.textContent = '📦 Recuperar';
@@ -307,15 +283,13 @@ export class UI {
 
     hideTowerInfo() {
         if (this.towerInfoPanel) this.towerInfoPanel.classList.remove('visible');
-        // NOTE: do NOT null _pickupHandler/_evolveHandler/_candyHandler here.
-        // They are persistent closures set once in ScenePlay._bindUI().
     }
 
-    bindPickupHandler(handler) { this._pickupHandler = handler; }
-    bindEvolveHandler(handler) { this._evolveHandler = handler; }
-    bindCandyHandler(handler) { this._candyHandler = handler; }
+    bindPickupHandler(handler)  { this._pickupHandler = handler; }
+    bindEvolveHandler(handler)  { this._evolveHandler = handler; }
+    bindCandyHandler(_handler)  { /* removed — no-op for backward compat */ }
     bindSpecialHandler(handler) { this._specialHandler = handler; }
-    bindAttackHandler(handler) { this._attackHandler = handler; }
+    bindAttackHandler(handler)  { this._attackHandler = handler; }
 
     // ─── Pokédex ──────────────────────────────────────────────────────────────
 
@@ -325,7 +299,7 @@ export class UI {
         if (this._pokedexCount) this._pokedexCount.textContent = `${count}/151`;
         this._pokedexGrid.innerHTML = '';
         if (count === 0) {
-            this._pokedexGrid.innerHTML = '<span style="font-size:10px;color:var(--text-dim);font-style:italic">¡Captura para llenar tu Pokédex!</span>';
+            this._pokedexGrid.innerHTML = '<span style="font-size:10px;color:var(--text-dim);font-style:italic">¡Captura Pokémon para llenar tu Pokédex!</span>';
             return;
         }
         for (const [id, entry] of pokedexMap) {
@@ -350,9 +324,7 @@ export class UI {
         if (this.menuOverlay) this.menuOverlay.classList.add('hidden');
     }
 
-
-
-    showRoundClear({ captured = 0, escaped = 0, xpGained = 0, pokeballsGained = 0 }) {
+    showRoundClear({ captured = 0, escaped = 0, xpGained = 0, pokeballsGained = 0, coinsGained = 0 }) {
         if (!this._roundClearEl) return;
         const perfect = escaped === 0 && captured > 0;
         this._roundClearEl.innerHTML = `
@@ -372,9 +344,9 @@ export class UI {
               <div style="color:#a371f7;font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700">+${xpGained}</div>
               <div style="color:#708070;font-size:9px;margin-top:1px;text-transform:uppercase;letter-spacing:.5px">XP Torre</div>
             </div>
-            <div style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25);border-radius:7px;padding:5px 8px;text-align:center">
-              <div style="color:#f85149;font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700">+${pokeballsGained}</div>
-              <div style="color:#708070;font-size:9px;margin-top:1px;text-transform:uppercase;letter-spacing:.5px">Pokébolas</div>
+            <div style="background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.25);border-radius:7px;padding:5px 8px;text-align:center">
+              <div style="color:#e3b341;font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700">+${coinsGained}</div>
+              <div style="color:#708070;font-size:9px;margin-top:1px;text-transform:uppercase;letter-spacing:.5px">💰 Monedas</div>
             </div>
           </div>
         `;
