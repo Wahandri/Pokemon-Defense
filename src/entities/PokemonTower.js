@@ -3,7 +3,7 @@
 // Visual: sprite displayed on a styled platform.
 // Attacks: type-based attack catalog with unlockable modes.
 
-import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier, getLevelBonusMultipliers } from '../data/balance.js';
+import { STARTER_TOWER_CONFIG, getPokemonLevelMultiplier, getLevelBonusMultipliers, TOWER_HP_BASE_MULT, TOWER_FAINT_BASE_COOLDOWN_MS, TOWER_FAINT_PENALTY_MS } from '../data/balance.js';
 import { getSpriteUrl } from '../data/pokemon.js';
 import { getTowerConfig } from '../data/pokemon_tower_config.js';
 import { getAttacksForType, getUnlockedAttacks } from '../data/pokemon_attacks.js';
@@ -52,6 +52,11 @@ export class PokemonTower {
         this.fireRate = cfg.fireRate;
         this.damage = cfg.damage * getPokemonLevelMultiplier(level);
         this.projSpeed = cfg.projSpeed;
+        this.maxHp = Math.max(30, Math.round(this.damage * TOWER_HP_BASE_MULT));
+        this.hp = this.maxHp;
+        this.fainted = false;
+        this.reviveTimer = 0;
+        this.faintCount = 0;
         this.color = cfg.color;
         this.glowColor = cfg.glowColor;
         this.bgColor = cfg.bgColor;
@@ -110,6 +115,8 @@ export class PokemonTower {
         this.range    *= bonus.range;
         this.fireRate *= bonus.fireRate;
         this._fireInterval = 1000 / Math.max(0.1, this.fireRate);
+        this.maxHp = Math.max(this.maxHp, Math.round(this.damage * TOWER_HP_BASE_MULT));
+        this.hp = Math.min(this.maxHp, this.hp + Math.round(this.maxHp * 0.12));
         // Re-evaluate active attack in case new attacks unlocked
         this._activeAttack = this._getActiveAttack();
     }
@@ -138,6 +145,14 @@ export class PokemonTower {
 
     update(dt, enemies, addProj) {
         if (this.dead) return;
+        if (this.fainted) {
+            this.reviveTimer = Math.max(0, this.reviveTimer - dt);
+            if (this.reviveTimer <= 0) {
+                this.fainted = false;
+                this.hp = this.maxHp;
+            }
+            return;
+        }
         const now = Date.now();
         const damageMult = (this._damageBoostEnd && now < this._damageBoostEnd) ? (this._damageBoostMult ?? 1.5) : 1;
         const fireRateMult = (this._fireRateBoostEnd && now < this._fireRateBoostEnd) ? (this._fireRateBoostMult ?? 1.5) : 1;
@@ -257,6 +272,8 @@ export class PokemonTower {
             ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2; ctx.stroke();
         }
 
+        if (this.fainted) ctx.globalAlpha = 0.45;
+
         // Base platform gradient
         const bg = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 1, 0, 0, r);
         bg.addColorStop(0, this.bgColor);
@@ -273,6 +290,15 @@ export class PokemonTower {
             ctx.lineWidth = 3 * fa; ctx.stroke();
             ctx.shadowBlur = 0;
         }
+
+        const hpPct = Math.max(0, this.hp / this.maxHp);
+        const hpW = Math.max(16, r * 2.1);
+        const hpX = -hpW / 2;
+        const hpY = -r - 8;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(hpX, hpY, hpW, 3);
+        ctx.fillStyle = hpPct > 0.5 ? '#3fb950' : hpPct > 0.25 ? '#e3b341' : '#f85149';
+        ctx.fillRect(hpX, hpY, hpW * hpPct, 3);
 
         // Level-up FX
         if (this._levelUpFx > 0) {
@@ -356,6 +382,20 @@ export class PokemonTower {
     getSpecialCooldownPct(now = Date.now()) {
         if (this.isSpecialReady(now)) return 0;
         return Math.max(0, Math.min(1, (this._specialReadyAt - now) / this.specialCooldownMs));
+    }
+
+    takeDamage(amount) {
+        if (this.dead || this.fainted) return false;
+        this.hp = Math.max(0, this.hp - Math.max(1, amount));
+        if (this.hp > 0) return false;
+        this.fainted = true;
+        this.faintCount += 1;
+        this.reviveTimer = TOWER_FAINT_BASE_COOLDOWN_MS + (this.faintCount * TOWER_FAINT_PENALTY_MS);
+        return true;
+    }
+
+    isAttackable() {
+        return !this.dead && !this.fainted;
     }
 }
 

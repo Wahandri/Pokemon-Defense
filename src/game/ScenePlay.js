@@ -721,6 +721,19 @@ export class ScenePlay {
                 }
             }
 
+            const towerHit = enemy.attackNearestTower?.(dt, this.towers);
+            if (towerHit) {
+                this.particles.push(new FloatingText(
+                    towerHit.tower.x,
+                    towerHit.tower.y - 24,
+                    `-${Math.round(towerHit.damage)}`,
+                    '#ff8a80'
+                ));
+                if (towerHit.didFaint) {
+                    this.ui.showMessage(`🫥 ${towerHit.tower.pokemonName} debilitado`, 900);
+                }
+            }
+
             if (enemy.reached && !enemy._rewarded) {
                 enemy._rewarded = true;
                 this.waveSystem.recordEscape();
