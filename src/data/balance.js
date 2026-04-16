@@ -5,6 +5,10 @@
 export const HP_SCALE = 1.10;
 export const ATK_LEVEL_SCALE = 1.09;
 
+export const TOWER_HP_BASE_MULT = 3.8;
+export const TOWER_FAINT_BASE_COOLDOWN_MS = 5000;
+export const TOWER_FAINT_PENALTY_MS = 3000;
+
 // Wild level progression inspired by Pokémon Red early-game pacing.
 const ROUND_LEVEL_TABLE = [3, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 

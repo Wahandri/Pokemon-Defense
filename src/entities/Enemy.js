@@ -29,6 +29,8 @@ export class Enemy {
         this.baseSpeed = def.speed;
         this.speed = def.speed;
         this.attack = (def.damage ?? 1) * levelMult;
+        this.towerAttackRange = 88;
+        this._towerAttackCooldown = 800 + Math.random() * 700;
         this.color = def.color;
         this.accent = def.accent;
         this.radius = def.radius;
@@ -164,6 +166,38 @@ export class Enemy {
         }
         const pos = this.pathSystem.getPositionAt(this.progress);
         this.x = pos.x; this.y = pos.y;
+    }
+
+
+    attackNearestTower(dt, towers) {
+        if (this.dead || this.weakened) return null;
+        this._towerAttackCooldown -= dt;
+        if (this._towerAttackCooldown > 0) return null;
+
+        let best = null;
+        let bestD2 = Infinity;
+        for (const t of towers) {
+            if (!t?.isAttackable?.()) continue;
+            const dx = t.x - this.x;
+            const dy = t.y - this.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+                best = t;
+                bestD2 = d2;
+            }
+        }
+
+        if (!best) return null;
+        const inRange = bestD2 <= this.towerAttackRange * this.towerAttackRange;
+        this._towerAttackCooldown = (inRange ? 700 : 1100) + Math.random() * 700;
+        if (!inRange) return null;
+
+        const didFaint = best.takeDamage?.(this.attack);
+        return {
+            tower: best,
+            damage: this.attack,
+            didFaint: !!didFaint,
+        };
     }
 
     draw(ctx, debug = false) {

@@ -10,7 +10,7 @@ import { STARTER_TOWER_CONFIG, xpToNextLevel, EVOLUTION_CHAIN } from '../data/ba
 import { KANTO_ZONES, isZoneUnlocked } from '../data/kanto_zones.js';
 import { SceneManager } from './SceneManager.js';
 import { ScenePlay } from './ScenePlay.js';
-import { SceneGymPlay } from './SceneGymPlay.js';
+import { SceneGymBattle } from './SceneGymBattle.js';
 import { ScenePC } from './ScenePC.js';
 import { loadSave, updateSave } from '../utils/storage.js';
 import { getSpriteUrl } from '../data/pokemon.js';
@@ -114,7 +114,7 @@ export class Game {
 
         // Gym battle
         this.sm.register('gym', ({ zone }) =>
-            new SceneGymPlay(
+            new SceneGymBattle(
                 this.ctx, this.ui, this.trainer, zone,
                 (gymZone) => this._onGymWin(gymZone),
                 () => this.goToZoneSelect()
@@ -145,7 +145,7 @@ export class Game {
         this.setSpeed(1);
         this.ui.showMessage(`🗺️ Entrando en: ${zone.name}`, 2000);
 
-        if (zone.type === 'gym') {
+        if (zone.isGym === true || zone.type === 'gym') {
             this.sm.setScene('gym', { zone });
         } else {
             this.sm.setScene('zone', { zone });
@@ -237,47 +237,44 @@ export class Game {
 
     // ─── Kanto visual map positions (px on 820×730 world) ────────────────────
     static ZONE_POSITIONS = {
-        route1:         { x: 400, y: 600 },
-        viridian_forest:{ x: 330, y: 470 },
-        pewter_gym:     { x: 215, y: 360 },
-        route3:         { x: 330, y: 275 },
-        mt_moon:        { x: 440, y: 245 },
-        cerulean_gym:   { x: 555, y: 195 },
-        route6:         { x: 540, y: 340 },
-        vermilion_gym:  { x: 530, y: 490 },
-        rock_tunnel:    { x: 660, y: 210 },
-        celadon_gym:    { x: 255, y: 370 },
-        route14:        { x: 230, y: 490 },
-        fuchsia_gym:    { x: 215, y: 600 },
-        route16:        { x: 155, y: 375 },
-        saffron_gym:    { x: 420, y: 345 },
-        seafoam:        { x: 130, y: 600 },
-        cinnabar_gym:   { x: 140, y: 695 },
-        victory_road:   { x: 265, y: 175 },
-        viridian_gym:   { x: 295, y: 530 },
+        route1:          { x: 100, y: 620 },
+        viridian_forest: { x: 220, y: 620 },
+        pewter_gym:      { x: 340, y: 620 },
+        route3:          { x: 460, y: 620 },
+        mt_moon:         { x: 580, y: 620 },
+        cerulean_gym:    { x: 700, y: 620 },
+        route6:          { x: 700, y: 520 },
+        vermilion_gym:   { x: 580, y: 520 },
+        rock_tunnel:     { x: 460, y: 520 },
+        celadon_gym:     { x: 340, y: 520 },
+        route14:         { x: 220, y: 520 },
+        fuchsia_gym:     { x: 100, y: 520 },
+        route16:         { x: 100, y: 420 },
+        saffron_gym:     { x: 220, y: 420 },
+        seafoam:         { x: 340, y: 420 },
+        cinnabar_gym:    { x: 460, y: 420 },
+        victory_road:    { x: 580, y: 420 },
+        viridian_gym:    { x: 700, y: 420 },
     };
 
     static ZONE_CONNECTIONS = [
-        ['route1','viridian_forest'],
-        ['viridian_forest','pewter_gym'],
-        ['viridian_forest','viridian_gym'],
-        ['pewter_gym','route3'],
-        ['pewter_gym','victory_road'],
-        ['route3','mt_moon'],
-        ['mt_moon','cerulean_gym'],
-        ['cerulean_gym','route6'],
-        ['cerulean_gym','rock_tunnel'],
-        ['route6','vermilion_gym'],
-        ['route6','saffron_gym'],
-        ['pewter_gym','celadon_gym'],
-        ['celadon_gym','saffron_gym'],
-        ['celadon_gym','route16'],
-        ['celadon_gym','route14'],
-        ['route14','fuchsia_gym'],
-        ['route16','fuchsia_gym'],
-        ['fuchsia_gym','seafoam'],
-        ['seafoam','cinnabar_gym'],
-        ['victory_road','viridian_gym'],
+        ['route1', 'viridian_forest'],
+        ['viridian_forest', 'pewter_gym'],
+        ['pewter_gym', 'route3'],
+        ['route3', 'mt_moon'],
+        ['mt_moon', 'cerulean_gym'],
+        ['cerulean_gym', 'route6'],
+        ['route6', 'vermilion_gym'],
+        ['vermilion_gym', 'rock_tunnel'],
+        ['rock_tunnel', 'celadon_gym'],
+        ['celadon_gym', 'route14'],
+        ['route14', 'fuchsia_gym'],
+        ['fuchsia_gym', 'route16'],
+        ['route16', 'saffron_gym'],
+        ['saffron_gym', 'seafoam'],
+        ['seafoam', 'cinnabar_gym'],
+        ['cinnabar_gym', 'victory_road'],
+        ['victory_road', 'viridian_gym'],
     ];
 
     _buildZoneOverlay() {
